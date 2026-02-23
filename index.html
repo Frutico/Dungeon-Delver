@@ -1170,7 +1170,10 @@
         return visited;
       }
 
-      // map cell types: 0=air, 1=ground, 2=wall, 3=platform, 4=spike, 5=ladder, 6=breakable, 7=ice, 8=crumble, 9=fire_trap, 10=moving_platform(marker), 11=decor
+      // map cell types:
+      // 0=air, 1=ground, 2=wall, 3=platform, 4=spike, 5=ladder, 6=breakable,
+      // 7=ice, 8=crumble, 9=fire_trap, 10=moving_platform(marker), 11=decor,
+      // 12=pop_spike, 13=turret, 14=electric
       function generateMapData() {
         let map = [];
         for (let r = 0; r < ROWS; r++) {
@@ -1316,7 +1319,22 @@
               map[r - 1][c] = 4;
             }
           }
-        // Fire traps (floor >= 5)
+        // Pop spikes
+        if (PD.floor >= 2) {
+          let popCh = 0.01 + PD.floor * 0.003;
+          for (let r = 2; r < ROWS - 2; r++)
+            for (let c = 3; c < COLS - 3; c++) {
+              if (
+                isSolid(map[r][c]) &&
+                r > 1 &&
+                map[r - 1][c] === 0 &&
+                Math.random() < popCh
+              ) {
+                map[r - 1][c] = 12;
+              }
+            }
+        }
+        // Fire traps
         if (PD.floor >= 5) {
           let ftCount = 1 + Math.floor(PD.floor / 5);
           for (let i = 0; i < ftCount; i++) {
@@ -1329,7 +1347,33 @@
             }
           }
         }
-        // Moving platform markers (floor >= 3)
+        // Turrets
+        if (PD.floor >= 6) {
+          let tCount = 1 + Math.floor(PD.floor / 6);
+          for (let i = 0; i < tCount; i++) {
+            let tc = 4 + Math.floor(Math.random() * (COLS - 8));
+            for (let r = 4; r < ROWS - 3; r++) {
+              if (isSolid(map[r][tc]) && map[r - 1][tc] === 0) {
+                map[r - 1][tc] = 13;
+                break;
+              }
+            }
+          }
+        }
+        // Electric floor
+        if (PD.floor >= 8) {
+          let eCount = 1 + Math.floor(PD.floor / 6);
+          for (let i = 0; i < eCount; i++) {
+            let ec = 4 + Math.floor(Math.random() * (COLS - 8));
+            for (let r = ROWS - 3; r > 3; r--) {
+              if (isSolid(map[r][ec]) && map[r - 1][ec] === 0) {
+                map[r - 1][ec] = 14;
+                break;
+              }
+            }
+          }
+        }
+        // Moving platform markers
         if (PD.floor >= 3) {
           let mpCount = 1 + Math.floor(PD.floor / 4);
           for (let i = 0; i < mpCount; i++) {
@@ -1346,13 +1390,12 @@
             }
           }
         }
-        // Decorations (stalactites, mushrooms, bones)
+        // Decorations
         let decoCount = 5 + Math.floor(Math.random() * 8);
         for (let i = 0; i < decoCount; i++) {
           let dc = 2 + Math.floor(Math.random() * (COLS - 4));
           let dr = 2 + Math.floor(Math.random() * (ROWS - 4));
           if (map[dr][dc] === 0) {
-            // only place in air, check something solid nearby
             let nearSolid = false;
             for (let dd of [
               [-1, 0],
@@ -1640,6 +1683,40 @@
           g.fillStyle(0xaaaaaa);
           g.fillTriangle(4, 32, 16, 4, 28, 32);
           g.generateTexture("spike", 32, 32);
+          // Pop spike
+          g.clear();
+          g.fillStyle(0xbbbbbb);
+          g.fillTriangle(6, 32, 16, 8, 26, 32);
+          g.fillStyle(0x888888);
+          g.fillRect(6, 26, 20, 6);
+          g.generateTexture("pop_spike", 32, 32);
+          // Electric floor
+          g.clear();
+          g.fillStyle(0x333333);
+          g.fillRect(0, 24, 32, 8);
+          g.fillStyle(0x44ccff);
+          g.fillRect(2, 26, 28, 4);
+          g.fillStyle(0x66eeff, 0.6);
+          g.fillRect(6, 25, 20, 2);
+          g.generateTexture("electric_floor", 32, 32);
+          // Turret
+          g.clear();
+          g.fillStyle(0x666666);
+          g.fillRect(0, 8, 24, 12);
+          g.fillStyle(0x444444);
+          g.fillRect(16, 10, 8, 8);
+          g.fillStyle(0xff4444);
+          g.fillRect(18, 12, 4, 4);
+          g.generateTexture("turret", 24, 24);
+          // Key
+          g.clear();
+          g.fillStyle(0xffdd55);
+          g.fillRect(4, 8, 10, 6);
+          g.fillRect(12, 6, 10, 10);
+          g.fillStyle(0xffaa00);
+          g.fillRect(18, 9, 6, 4);
+          g.generateTexture("key", 24, 16);
+
           g.clear();
           g.fillStyle(0xffdd00);
           g.fillCircle(8, 8, 7);
@@ -1912,6 +1989,9 @@
           this.walkFrame = 0;
           this.walkTimer = 0;
           this._exitMsgCd = 0;
+          this.hasKey = false;
+          this.playerOnPlatform = null;
+          this.enemyMinDist = 12;
           // Movement feel
           this.coyoteTimer = 0; // time since last grounded
           this.jumpBufferTimer = 0; // time since jump pressed
@@ -1939,7 +2019,10 @@
           this.icePlatforms = this.physics.add.staticGroup();
           this.crumblePlatforms = this.physics.add.staticGroup();
           this.spikes = this.physics.add.staticGroup();
+          this.popSpikes = this.physics.add.staticGroup();
           this.fireTraps = this.physics.add.staticGroup();
+          this.electrics = this.physics.add.staticGroup();
+          this.turrets = this.physics.add.staticGroup();
           this.ladders = this.physics.add.staticGroup();
           this.breakables = this.physics.add.staticGroup();
           this.movingPlatforms = this.physics.add.group({
@@ -1953,7 +2036,10 @@
             this.icePlatforms.clear(true, true);
             this.crumblePlatforms.clear(true, true);
             this.spikes.clear(true, true);
+            this.popSpikes.clear(true, true);
             this.fireTraps.clear(true, true);
+            this.electrics.clear(true, true);
+            this.turrets.clear(true, true);
             this.ladders.clear(true, true);
             this.breakables.clear(true, true);
             this.movingPlatforms.clear(true, true);
@@ -1969,7 +2055,10 @@
             this.icePlatforms.clear(true, true);
             this.crumblePlatforms.clear(true, true);
             this.spikes.clear(true, true);
+            this.popSpikes.clear(true, true);
             this.fireTraps.clear(true, true);
+            this.electrics.clear(true, true);
+            this.turrets.clear(true, true);
             this.ladders.clear(true, true);
             this.breakables.clear(true, true);
             this.movingPlatforms.clear(true, true);
@@ -2038,6 +2127,8 @@
                 case 6: {
                   let br = this.breakables.create(tx, ty, "breakable");
                   br.hp = 3;
+                  br.tileR = r;
+                  br.tileC = c;
                   break;
                 }
                 case 7: {
@@ -2081,7 +2172,7 @@
                   break;
                 }
                 case 11: {
-                  let d = this.add
+                  this.add
                     .image(
                       tx,
                       ty,
@@ -2091,6 +2182,37 @@
                     )
                     .setAlpha(0.5)
                     .setDepth(-1);
+                  break;
+                }
+                case 12: {
+                  let ps = this.popSpikes.create(tx, ty, "pop_spike");
+                  ps.popTimer = Math.random() * 2;
+                  ps.popActive = false;
+                  ps.popCycle = 2 + Math.random() * 2;
+                  ps.body.setSize(24, 12);
+                  ps.body.setOffset(4, 20);
+                  ps.setAlpha(0.5);
+                  break;
+                }
+                case 13: {
+                  let tr = this.turrets.create(tx, ty, "turret");
+                  tr.body.setSize(22, 16);
+                  tr.body.setOffset(1, 6);
+                  tr.shotTimer = 0;
+                  tr.shotInterval = 1.2 + Math.random();
+                  tr.dir =
+                    map[r][c + 1] === 0 ? 1 : map[r][c - 1] === 0 ? -1 : 1;
+                  if (tr.dir < 0) tr.setFlipX(true);
+                  break;
+                }
+                case 14: {
+                  let el = this.electrics.create(tx, ty, "electric_floor");
+                  el.eTimer = Math.random() * 2;
+                  el.eActive = false;
+                  el.eCycle = 2 + Math.random() * 2;
+                  el.body.setSize(28, 8);
+                  el.body.setOffset(2, 24);
+                  el.setAlpha(0.5);
                   break;
                 }
               }
@@ -2135,6 +2257,7 @@
           this.itemDrops = this.physics.add.group();
           this.projectiles = this.physics.add.group();
           this.spawnPickups();
+          this.spawnKey();
           this.shieldSprite = null;
           if (PD.shieldHits > 0)
             this.shieldSprite = this.add
@@ -2188,17 +2311,42 @@
             },
           );
           this.physics.add.collider(this.player, this.breakables);
-          this.physics.add.collider(this.player, this.movingPlatforms);
+          this.physics.add.collider(
+            this.player,
+            this.movingPlatforms,
+            (player, mp) => {
+              this.playerOnPlatform = mp;
+            },
+          );
+
           this.physics.add.collider(this.enemies, this.platforms);
           this.physics.add.collider(this.enemies, this.icePlatforms);
           this.physics.add.collider(this.enemies, this.breakables);
+          this.physics.add.collider(this.enemies, this.movingPlatforms);
           this.physics.add.collider(this.coins, this.platforms);
           this.physics.add.collider(this.coins, this.icePlatforms);
           this.physics.add.collider(this.itemDrops, this.platforms);
+
+          // Player vs enemies should collide, not overlap
+          this.physics.add.collider(
+            this.player,
+            this.enemies,
+            this.hitEnemy,
+            null,
+            this,
+          );
+
           this.physics.add.overlap(
             this.player,
             this.spikes,
             this.hitSpike,
+            null,
+            this,
+          );
+          this.physics.add.overlap(
+            this.player,
+            this.popSpikes,
+            this.hitPopSpike,
             null,
             this,
           );
@@ -2211,8 +2359,8 @@
           );
           this.physics.add.overlap(
             this.player,
-            this.enemies,
-            this.hitEnemy,
+            this.electrics,
+            this.hitElectric,
             null,
             this,
           );
@@ -2250,6 +2398,20 @@
             this.hitProjectile,
             null,
             this,
+          );
+
+          this.physics.add.collider(this.projectiles, this.platforms, (proj) =>
+            proj.destroy(),
+          );
+          this.physics.add.collider(
+            this.projectiles,
+            this.icePlatforms,
+            (proj) => proj.destroy(),
+          );
+          this.physics.add.collider(
+            this.projectiles,
+            this.breakables,
+            (proj, br) => proj.destroy(),
           );
 
           this.cursors = this.input.keyboard.createCursorKeys();
@@ -2298,6 +2460,141 @@
           saveGame();
         }
 
+        setMapCell(r, c, v) {
+          if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return;
+          this.mapData[r][c] = v;
+        }
+        tileIsSolid(r, c) {
+          if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return true;
+          return isSolid(this.mapData[r][c]);
+        }
+        worldToTile(x, y) {
+          return {
+            r: Math.floor(y / TH),
+            c: Math.floor(x / TW),
+          };
+        }
+        hasLineOfSight(x1, y1, x2, y2) {
+          let t1 = this.worldToTile(x1, y1);
+          let t2 = this.worldToTile(x2, y2);
+          let x0 = t1.c,
+            y0 = t1.r,
+            x1t = t2.c,
+            y1t = t2.r;
+          let dx = Math.abs(x1t - x0),
+            dy = Math.abs(y1t - y0);
+          let sx = x0 < x1t ? 1 : -1;
+          let sy = y0 < y1t ? 1 : -1;
+          let err = dx - dy;
+          let steps = 0;
+          while (true) {
+            if (steps > 0 && this.tileIsSolid(y0, x0)) return false;
+            if (x0 === x1t && y0 === y1t) break;
+            let e2 = 2 * err;
+            if (e2 > -dy) {
+              err -= dy;
+              x0 += sx;
+            }
+            if (e2 < dx) {
+              err += dx;
+              y0 += sy;
+            }
+            steps++;
+            if (steps > 200) break;
+          }
+          return true;
+        }
+        findSeekDir(e) {
+          let maxScan = 6;
+          let r = Math.floor(e.y / TH);
+          for (let d = 1; d <= maxScan; d++) {
+            let cR = Math.floor((e.x + d * TW) / TW);
+            if (!this.tileIsSolid(r, cR)) {
+              if (
+                this.hasLineOfSight(
+                  e.x + d * TW,
+                  e.y,
+                  this.player.x,
+                  this.player.y,
+                )
+              )
+                return 1;
+            }
+            let cL = Math.floor((e.x - d * TW) / TW);
+            if (!this.tileIsSolid(r, cL)) {
+              if (
+                this.hasLineOfSight(
+                  e.x - d * TW,
+                  e.y,
+                  this.player.x,
+                  this.player.y,
+                )
+              )
+                return -1;
+            }
+          }
+          return 0;
+        }
+        spawnKey() {
+          if (this.isBossFloor) return;
+          let spots = [...(this.validItemSpots || this.validEnemySpots)];
+          Phaser.Utils.Array.Shuffle(spots);
+          if (!spots.length) return;
+          let s = spots.pop();
+          this.keyItem = this.physics.add
+            .sprite(s.c * TW + TW / 2, s.r * TH + TH / 2 - 10, "key")
+            .setDepth(6);
+          this.keyItem.body.setAllowGravity(false);
+          this.physics.add.overlap(
+            this.player,
+            this.keyItem,
+            () => {
+              this.hasKey = true;
+              this.floatText(
+                this.player.x,
+                this.player.y - 30,
+                "Key acquired!",
+                "#ffdd55",
+              );
+              this.keyItem.destroy();
+            },
+            null,
+            this,
+          );
+        }
+        destroyBreakable(br) {
+          if (!br || !br.active) return;
+          let r = br.tileR ?? Math.floor(br.y / TH);
+          let c = br.tileC ?? Math.floor(br.x / TW);
+          this.setMapCell(r, c, 0);
+          this.scheduleBreakableRespawn(r, c);
+          br.destroy();
+        }
+        scheduleBreakableRespawn(r, c) {
+          let delay = 5000 + Math.random() * 5000;
+          this.time.delayedCall(delay, () => {
+            if (this.tileIsSolid(r, c)) return;
+            let wx = c * TW + TW / 2,
+              wy = r * TH + TH / 2;
+            let rect = new Phaser.Geom.Rectangle(wx - 12, wy - 12, 24, 24);
+            let overlapsPlayer =
+              this.player &&
+              Phaser.Geom.Intersects.RectangleToRectangle(
+                rect,
+                this.player.getBounds(),
+              );
+            if (overlapsPlayer) {
+              this.scheduleBreakableRespawn(r, c);
+              return;
+            }
+            this.setMapCell(r, c, 6);
+            let br = this.breakables.create(wx, wy, "breakable");
+            br.hp = 3;
+            br.tileR = r;
+            br.tileC = c;
+          });
+        }
+
         spawnEnemies() {
           let count = 4 + PD.floor * 2;
           let types = ["slime"];
@@ -2337,6 +2634,7 @@
           e.isBoss = false;
           e.aggroed = false;
           e.aggroRange = ed.aggroRange || 180;
+          e.lostSightTimer = 0;
           e.body.setSize(ed.w - 4, ed.h - 4);
           if (type === "bat" || type === "ghost") {
             e.body.setAllowGravity(false);
@@ -2517,6 +2815,16 @@
           if (this.invTimer > 0 || this.gameOver) return;
           this.takeDamage(10 + PD.floor * 2);
           p.setVelocityY(JUMP_VEL * 0.5);
+        }
+        hitPopSpike(p, trap) {
+          if (this.invTimer > 0 || this.gameOver || !trap.popActive) return;
+          this.takeDamage(8 + PD.floor * 2);
+          p.setVelocityY(JUMP_VEL * 0.4);
+        }
+        hitElectric(p, trap) {
+          if (this.invTimer > 0 || this.gameOver || !trap.eActive) return;
+          this.takeDamage(6 + PD.floor * 2);
+          p.setVelocityY(JUMP_VEL * 0.3);
         }
         hitFireTrap(p, trap) {
           if (this.invTimer > 0 || this.gameOver || !trap.fireActive) return;
@@ -2783,7 +3091,7 @@
                   ) < 100
                 ) {
                   this.spawnBreakableReward(b.x, b.y);
-                  b.destroy();
+                  this.destroyBreakable(b);
                 }
               });
               break;
@@ -2831,6 +3139,18 @@
         }
         reachExit() {
           if (this.gameOver) return;
+          if (!this.isBossFloor && !this.hasKey) {
+            if (this._exitMsgCd <= 0) {
+              this.floatText(
+                this.player.x,
+                this.player.y - 30,
+                "Need a Key!",
+                "#ffdd55",
+              );
+              this._exitMsgCd = 2;
+            }
+            return;
+          }
           if (this.isBossFloor) {
             let alive = false;
             this.enemies.children.each((e) => {
@@ -2906,7 +3226,7 @@
               br.setAlpha(0.3 + 0.7 * (br.hp / 3));
               if (br.hp <= 0) {
                 this.spawnBreakableReward(br.x, br.y);
-                br.destroy();
+                this.destroyBreakable(br);
               }
             },
           );
@@ -3050,7 +3370,15 @@
             dy = this.player.y - e.y,
             dist = Math.sqrt(dx * dx + dy * dy);
           let type = e.etype;
-          if (!e.aggroed && dist < e.aggroRange) {
+
+          let hasLOS = this.hasLineOfSight(
+            e.x,
+            e.y,
+            this.player.x,
+            this.player.y,
+          );
+
+          if (!e.aggroed && dist < e.aggroRange && hasLOS) {
             e.aggroed = true;
             this.enemies.children.each((o) => {
               if (
@@ -3061,9 +3389,24 @@
                 o.aggroed = true;
             });
           }
+
+          if (e.aggroed && !hasLOS) {
+            e.lostSightTimer += dt;
+            let seekDir = this.findSeekDir(e);
+            if (seekDir !== 0) {
+              e.setVelocityX(seekDir * e.espeed * 0.8);
+              e.lostSightTimer = 0;
+            } else if (e.lostSightTimer > 1.2) {
+              e.aggroed = false;
+              e.lostSightTimer = 0;
+            }
+          } else if (e.aggroed) {
+            e.lostSightTimer = 0;
+          }
+
           if (type === "bat" || type === "ghost") {
             e.wavt = (e.wavt || 0) + dt * 3;
-            if (e.aggroed) {
+            if (e.aggroed && hasLOS) {
               e.setVelocityX(Math.sign(dx) * e.espeed * 1.3);
               e.setVelocityY((this.player.y - e.y) * 2);
             } else {
@@ -3080,12 +3423,13 @@
             if (type === "ghost") e.setAlpha(0.5 + Math.sin(e.wavt) * 0.3);
           } else if (e.aggroed) {
             let cs = e.espeed * (type === "golem" ? 0.8 : 1.2);
-            if (dist < 300) {
+            if (dist < 300 && hasLOS) {
               e.setVelocityX(Math.sign(dx) * cs);
               if (dy < -40 && e.body.blocked.down && Math.abs(dx) < 150)
                 e.setVelocityY(-300);
-            } else e.setVelocityX(Math.sign(dx) * e.espeed * 0.5);
-            if (BOSS_DEFS[type] && e.attackCd <= 0 && dist < 300) {
+            } else if (hasLOS) e.setVelocityX(Math.sign(dx) * e.espeed * 0.5);
+
+            if (BOSS_DEFS[type] && e.attackCd <= 0 && dist < 300 && hasLOS) {
               e.attackCd = 1.5;
               let proj = this.projectiles.create(e.x, e.y - 5, "coin");
               proj.setTint(0xff2222);
@@ -3118,6 +3462,13 @@
             if (e.body.blocked.left) e.dir = 1;
             if (e.body.blocked.right) e.dir = -1;
           }
+
+          // Keep mobs from staying inside player
+          if (dist < this.enemyMinDist) {
+            let pushDir = e.x < this.player.x ? -1 : 1;
+            e.setVelocityX(pushDir * e.espeed);
+          }
+
           e.setFlipX(e.body.velocity.x < 0);
           if (!e.hpBarBg) {
             let bw = e.isBoss ? 60 : 26;
@@ -3233,16 +3584,68 @@
             ft.setAlpha(ft.fireActive ? 1 : 0.4);
           });
 
-          // Update moving platforms - use sine wave for smooth movement
+          // Update pop spikes
+          this.popSpikes.children.each((ps) => {
+            if (!ps.active) return;
+            ps.popTimer += dt;
+            let phase = ps.popTimer % ps.popCycle;
+            ps.popActive = phase < 0.6;
+            ps.setAlpha(ps.popActive ? 1 : 0.35);
+          });
+
+          // Update electric floors
+          this.electrics.children.each((el) => {
+            if (!el.active) return;
+            el.eTimer += dt;
+            let phase = el.eTimer % el.eCycle;
+            el.eActive = phase < 0.9;
+            el.setAlpha(el.eActive ? 1 : 0.35);
+          });
+
+          // Update turrets
+          this.turrets.children.each((tr) => {
+            if (!tr.active) return;
+            tr.shotTimer += dt;
+            if (tr.shotTimer >= tr.shotInterval) {
+              tr.shotTimer = 0;
+              let dist = Phaser.Math.Distance.Between(
+                tr.x,
+                tr.y,
+                this.player.x,
+                this.player.y,
+              );
+              if (
+                dist < 320 &&
+                this.hasLineOfSight(tr.x, tr.y, this.player.x, this.player.y)
+              ) {
+                let proj = this.projectiles.create(tr.x, tr.y, "coin");
+                proj.setTint(0xff6666);
+                proj.body.setAllowGravity(false);
+                proj.damage = 6 + Math.floor(PD.floor * 0.5);
+                proj.setVelocity(tr.dir * 240, 0);
+                this.time.delayedCall(2500, () => {
+                  if (proj && proj.active) proj.destroy();
+                });
+              }
+            }
+          });
+
+          // Update moving platforms
           this.movingPlatforms.children.each((mp) => {
             if (!mp.active) return;
             mp.movePhase += dt * mp.moveSpeed * 0.03;
             let newX = mp.startX + Math.sin(mp.movePhase) * mp.moveRange;
             mp.body.velocity.x = ((newX - mp.x) / dt) * 0.5;
-            // Clamp to prevent going out of bounds
             if (mp.x < TW * 2 || mp.x > WORLD_W - TW * 2)
               mp.body.velocity.x *= -1;
           });
+
+          // Carry player with moving platform
+          if (this.playerOnPlatform && this.player.body.blocked.down) {
+            this.player.x += this.playerOnPlatform.body.velocity.x * dt;
+          } else if (!this.player.body.blocked.down) {
+            this.playerOnPlatform = null;
+          }
 
           let onFloor = this.player.body.blocked.down;
           // Reset ice flag each frame, set by collision callback
@@ -3441,6 +3844,9 @@
               PD.gold +
               " Floor:" +
               PD.floor +
+              (this.isBossFloor
+                ? " [BOSS]"
+                : " Key:" + (this.hasKey ? "Yes" : "No")) +
               "\nATK:" +
               stats.attack +
               " DEF:" +
