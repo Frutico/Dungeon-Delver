@@ -1,0 +1,3184 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dungeon Delver - Roguelike Platformer</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        background: #000;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        overflow: hidden;
+      }
+      canvas {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+    <script>
+      const TW = 32,
+        TH = 32,
+        COLS = 50,
+        ROWS = 30;
+      const WORLD_W = COLS * TW,
+        WORLD_H = ROWS * TH;
+      const GRAVITY = 900,
+        JUMP_VEL = -400,
+        MOVE_SPD = 160,
+        DASH_SPD = 400,
+        DASH_DUR = 0.18,
+        DASH_CD = 0.8;
+      const RARITIES = {
+        common: "#aaaaaa",
+        uncommon: "#55ff55",
+        rare: "#5555ff",
+        epic: "#ff55ff",
+        legendary: "#ffaa00",
+      };
+      const BIOMES = {
+        cave: {
+          bg: 0x1a1a2e,
+          ground: 0x886644,
+          wall: 0x555555,
+          platform: 0x997755,
+          name: "Cave",
+        },
+        castle: {
+          bg: 0x1a1a30,
+          ground: 0x556677,
+          wall: 0x667788,
+          platform: 0x778899,
+          name: "Castle",
+        },
+        hell: {
+          bg: 0x2a0a0a,
+          ground: 0x553322,
+          wall: 0x662222,
+          platform: 0x774433,
+          name: "Inferno",
+        },
+        ice: {
+          bg: 0x0a1a2a,
+          ground: 0x88aacc,
+          wall: 0x6699bb,
+          platform: 0x99bbdd,
+          name: "Frozen Depths",
+        },
+        void: {
+          bg: 0x0a0a1a,
+          ground: 0x443366,
+          wall: 0x332255,
+          platform: 0x554477,
+          name: "The Void",
+        },
+      };
+      function getBiome(f) {
+        if (f <= 4) return BIOMES.cave;
+        if (f <= 9) return BIOMES.castle;
+        if (f <= 14) return BIOMES.hell;
+        if (f <= 19) return BIOMES.ice;
+        return BIOMES.void;
+      }
+      const ITEMS = [
+        {
+          id: "leather_cap",
+          name: "Leather Cap",
+          slot: "head",
+          set: "leather",
+          rarity: "common",
+          stats: { defense: 1, maxHp: 5 },
+          minFloor: 1,
+          cost: 30,
+        },
+        {
+          id: "leather_vest",
+          name: "Leather Vest",
+          slot: "body",
+          set: "leather",
+          rarity: "common",
+          stats: { defense: 2, maxHp: 10 },
+          minFloor: 1,
+          cost: 50,
+        },
+        {
+          id: "leather_boots",
+          name: "Leather Boots",
+          slot: "feet",
+          set: "leather",
+          rarity: "common",
+          stats: { defense: 1, speed: 10 },
+          minFloor: 1,
+          cost: 35,
+        },
+        {
+          id: "wooden_sword",
+          name: "Wooden Sword",
+          slot: "weapon",
+          set: "leather",
+          rarity: "common",
+          stats: { attack: 3 },
+          minFloor: 1,
+          cost: 40,
+        },
+        {
+          id: "iron_helm",
+          name: "Iron Helm",
+          slot: "head",
+          set: "iron",
+          rarity: "uncommon",
+          stats: { defense: 3, maxHp: 15 },
+          minFloor: 3,
+          cost: 80,
+        },
+        {
+          id: "iron_plate",
+          name: "Iron Plate",
+          slot: "body",
+          set: "iron",
+          rarity: "uncommon",
+          stats: { defense: 5, maxHp: 20 },
+          minFloor: 3,
+          cost: 120,
+        },
+        {
+          id: "iron_greaves",
+          name: "Iron Greaves",
+          slot: "feet",
+          set: "iron",
+          rarity: "uncommon",
+          stats: { defense: 2, speed: 5 },
+          minFloor: 3,
+          cost: 90,
+        },
+        {
+          id: "steel_sword",
+          name: "Steel Sword",
+          slot: "weapon",
+          set: "iron",
+          rarity: "uncommon",
+          stats: { attack: 6 },
+          minFloor: 3,
+          cost: 100,
+        },
+        {
+          id: "shadow_hood",
+          name: "Shadow Hood",
+          slot: "head",
+          set: "shadow",
+          rarity: "rare",
+          stats: { defense: 2, speed: 20, crit: 5 },
+          minFloor: 6,
+          cost: 180,
+        },
+        {
+          id: "shadow_cloak",
+          name: "Shadow Cloak",
+          slot: "body",
+          set: "shadow",
+          rarity: "rare",
+          stats: { defense: 4, speed: 15, crit: 5 },
+          minFloor: 6,
+          cost: 220,
+        },
+        {
+          id: "shadow_steps",
+          name: "Shadow Steps",
+          slot: "feet",
+          set: "shadow",
+          rarity: "rare",
+          stats: { defense: 2, speed: 30 },
+          minFloor: 6,
+          cost: 190,
+        },
+        {
+          id: "shadow_blade",
+          name: "Shadow Blade",
+          slot: "weapon",
+          set: "shadow",
+          rarity: "rare",
+          stats: { attack: 8, crit: 10 },
+          minFloor: 6,
+          cost: 200,
+        },
+        {
+          id: "fire_crown",
+          name: "Fire Crown",
+          slot: "head",
+          set: "fire",
+          rarity: "epic",
+          stats: { defense: 4, attack: 3, maxHp: 20 },
+          minFloor: 10,
+          cost: 350,
+        },
+        {
+          id: "fire_armor",
+          name: "Fire Armor",
+          slot: "body",
+          set: "fire",
+          rarity: "epic",
+          stats: { defense: 7, attack: 2, maxHp: 30 },
+          minFloor: 10,
+          cost: 400,
+        },
+        {
+          id: "fire_treads",
+          name: "Fire Treads",
+          slot: "feet",
+          set: "fire",
+          rarity: "epic",
+          stats: { defense: 3, speed: 15, attack: 2 },
+          minFloor: 10,
+          cost: 360,
+        },
+        {
+          id: "inferno_blade",
+          name: "Inferno Blade",
+          slot: "weapon",
+          set: "fire",
+          rarity: "epic",
+          stats: { attack: 14 },
+          minFloor: 10,
+          cost: 380,
+        },
+        {
+          id: "void_mask",
+          name: "Void Mask",
+          slot: "head",
+          set: "void",
+          rarity: "legendary",
+          stats: { defense: 6, attack: 5, maxHp: 30, crit: 5 },
+          minFloor: 16,
+          cost: 600,
+        },
+        {
+          id: "void_robe",
+          name: "Void Robe",
+          slot: "body",
+          set: "void",
+          rarity: "legendary",
+          stats: { defense: 9, attack: 4, maxHp: 40 },
+          minFloor: 16,
+          cost: 700,
+        },
+        {
+          id: "void_walkers",
+          name: "Void Walkers",
+          slot: "feet",
+          set: "void",
+          rarity: "legendary",
+          stats: { defense: 4, speed: 35, crit: 5 },
+          minFloor: 16,
+          cost: 620,
+        },
+        {
+          id: "void_reaper",
+          name: "Void Reaper",
+          slot: "weapon",
+          set: "void",
+          rarity: "legendary",
+          stats: { attack: 20, crit: 10 },
+          minFloor: 16,
+          cost: 680,
+        },
+      ];
+      const CONSUMABLES = [
+        {
+          id: "hp_potion",
+          name: "Health Potion",
+          desc: "Restore 50 HP",
+          cost: 20,
+          effect: "heal",
+          value: 50,
+          icon: 0xff4444,
+        },
+        {
+          id: "big_hp_potion",
+          name: "Greater Potion",
+          desc: "Restore 120 HP",
+          cost: 50,
+          effect: "heal",
+          value: 120,
+          icon: 0xff2222,
+          minFloor: 5,
+        },
+        {
+          id: "bomb",
+          name: "Bomb",
+          desc: "40 AoE damage",
+          cost: 25,
+          effect: "bomb",
+          value: 40,
+          icon: 0xffaa00,
+        },
+        {
+          id: "big_bomb",
+          name: "Mega Bomb",
+          desc: "100 AoE damage",
+          cost: 60,
+          effect: "bomb",
+          value: 100,
+          icon: 0xff6600,
+          minFloor: 8,
+        },
+        {
+          id: "shield_scroll",
+          name: "Shield Scroll",
+          desc: "Block 3 hits",
+          cost: 40,
+          effect: "shield",
+          value: 3,
+          icon: 0x44aaff,
+          minFloor: 3,
+        },
+        {
+          id: "atk_elixir",
+          name: "Attack Elixir",
+          desc: "+5 ATK this floor",
+          cost: 35,
+          effect: "tempAtk",
+          value: 5,
+          icon: 0xff8844,
+          minFloor: 4,
+        },
+        {
+          id: "spd_elixir",
+          name: "Speed Elixir",
+          desc: "+30 SPD this floor",
+          cost: 30,
+          effect: "tempSpd",
+          value: 30,
+          icon: 0x44ffaa,
+          minFloor: 4,
+        },
+      ];
+      const SET_BONUSES = {
+        leather: {
+          2: { defense: 1, label: "Leather 2pc: +1 DEF" },
+          3: { maxHp: 15, label: "Leather 3pc: +15 HP" },
+          4: { regen: 1, label: "Leather 4pc: Regen" },
+        },
+        iron: {
+          2: { defense: 3, label: "Iron 2pc: +3 DEF" },
+          3: { maxHp: 25, label: "Iron 3pc: +25 HP" },
+          4: { thorns: 2, label: "Iron 4pc: Thorns" },
+        },
+        shadow: {
+          2: { speed: 20, label: "Shadow 2pc: +20 SPD" },
+          3: { crit: 15, label: "Shadow 3pc: +15% Crit" },
+          4: { doubleJump: true, label: "Shadow 4pc: Double Jump" },
+        },
+        fire: {
+          2: { attack: 5, label: "Fire 2pc: +5 ATK" },
+          3: { maxHp: 40, label: "Fire 3pc: +40 HP" },
+          4: { fireAura: 3, label: "Fire 4pc: Fire Aura" },
+        },
+        void: {
+          2: { attack: 8, label: "Void 2pc: +8 ATK" },
+          3: { crit: 20, label: "Void 3pc: +20% Crit" },
+          4: { lifesteal: 15, label: "Void 4pc: 15% Lifesteal" },
+        },
+      };
+      const TALENTS = [
+        {
+          id: "vitality",
+          name: "Vitality",
+          desc: "+15 HP",
+          maxRank: 5,
+          effect: { maxHp: 15 },
+        },
+        {
+          id: "strength",
+          name: "Strength",
+          desc: "+2 ATK",
+          maxRank: 5,
+          effect: { attack: 2 },
+        },
+        {
+          id: "armor",
+          name: "Toughness",
+          desc: "+2 DEF",
+          maxRank: 5,
+          effect: { defense: 2 },
+        },
+        {
+          id: "agility",
+          name: "Agility",
+          desc: "+10 SPD",
+          maxRank: 3,
+          effect: { speed: 10 },
+        },
+        {
+          id: "critical",
+          name: "Precision",
+          desc: "+5% Crit",
+          maxRank: 3,
+          effect: { crit: 5 },
+        },
+        {
+          id: "vampirism",
+          name: "Vampirism",
+          desc: "+5% LS",
+          maxRank: 3,
+          effect: { lifesteal: 5 },
+        },
+        {
+          id: "dash_master",
+          name: "Dash Master",
+          desc: "-0.15s CD",
+          maxRank: 3,
+          effect: { dashCdReduce: 0.15 },
+        },
+        {
+          id: "treasure",
+          name: "Treasure",
+          desc: "+15% Gold",
+          maxRank: 3,
+          effect: { goldBonus: 15 },
+        },
+      ];
+      const ENEMY_DEFS = {
+        slime: {
+          hp: 15,
+          attack: 3,
+          defense: 1,
+          speed: 40,
+          xp: 10,
+          gold: 5,
+          color: 0x44cc44,
+          w: 24,
+          h: 20,
+          aggroRange: 150,
+        },
+        bat: {
+          hp: 10,
+          attack: 4,
+          defense: 0,
+          speed: 70,
+          xp: 15,
+          gold: 8,
+          color: 0x8844aa,
+          w: 22,
+          h: 18,
+          aggroRange: 200,
+        },
+        skeleton: {
+          hp: 30,
+          attack: 6,
+          defense: 3,
+          speed: 50,
+          xp: 25,
+          gold: 15,
+          color: 0xcccccc,
+          w: 22,
+          h: 28,
+          aggroRange: 220,
+        },
+        demon: {
+          hp: 60,
+          attack: 10,
+          defense: 5,
+          speed: 60,
+          xp: 50,
+          gold: 30,
+          color: 0xcc2222,
+          w: 28,
+          h: 30,
+          aggroRange: 250,
+        },
+        ghost: {
+          hp: 25,
+          attack: 8,
+          defense: 0,
+          speed: 80,
+          xp: 30,
+          gold: 20,
+          color: 0xaaccff,
+          w: 22,
+          h: 24,
+          aggroRange: 200,
+        },
+        golem: {
+          hp: 100,
+          attack: 12,
+          defense: 8,
+          speed: 25,
+          xp: 60,
+          gold: 35,
+          color: 0x887744,
+          w: 30,
+          h: 32,
+          aggroRange: 180,
+        },
+      };
+      const BOSS_DEFS = {
+        slime_king: {
+          hp: 200,
+          attack: 8,
+          defense: 4,
+          speed: 35,
+          xp: 150,
+          gold: 100,
+          color: 0x22aa22,
+          w: 48,
+          h: 40,
+          name: "Slime King",
+        },
+        bone_lord: {
+          hp: 350,
+          attack: 14,
+          defense: 6,
+          speed: 45,
+          xp: 250,
+          gold: 180,
+          color: 0xddddcc,
+          w: 44,
+          h: 48,
+          name: "Bone Lord",
+        },
+        inferno_wyrm: {
+          hp: 500,
+          attack: 20,
+          defense: 8,
+          speed: 55,
+          xp: 400,
+          gold: 280,
+          color: 0xff4422,
+          w: 52,
+          h: 44,
+          name: "Inferno Wyrm",
+        },
+        frost_titan: {
+          hp: 650,
+          attack: 24,
+          defense: 12,
+          speed: 40,
+          xp: 500,
+          gold: 350,
+          color: 0x88ccff,
+          w: 56,
+          h: 52,
+          name: "Frost Titan",
+        },
+        void_emperor: {
+          hp: 900,
+          attack: 30,
+          defense: 15,
+          speed: 60,
+          xp: 700,
+          gold: 500,
+          color: 0x6633aa,
+          w: 56,
+          h: 56,
+          name: "Void Emperor",
+        },
+      };
+      function getBoss(f) {
+        if (f === 5) return "slime_king";
+        if (f === 10) return "bone_lord";
+        if (f === 15) return "inferno_wyrm";
+        if (f === 20) return "frost_titan";
+        if (f % 5 === 0 && f > 20) return "void_emperor";
+        return null;
+      }
+      const PD = {
+        level: 1,
+        xp: 0,
+        xpToNext: 100,
+        floor: 1,
+        gold: 0,
+        hp: 100,
+        maxHp: 100,
+        baseAttack: 5,
+        baseDefense: 2,
+        baseSpeed: MOVE_SPD,
+        baseCrit: 5,
+        equipment: { head: null, body: null, feet: null, weapon: null },
+        inventory: [],
+        consumables: [],
+        talents: {},
+        talentPoints: 0,
+        tempBuffs: { atk: 0, spd: 0 },
+        shieldHits: 0,
+        phoenixUsed: false,
+        kills: 0,
+        totalGold: 0,
+        reset() {
+          this.level = 1;
+          this.xp = 0;
+          this.xpToNext = 100;
+          this.floor = 1;
+          this.gold = 0;
+          this.hp = 100;
+          this.maxHp = 100;
+          this.baseAttack = 5;
+          this.baseDefense = 2;
+          this.baseSpeed = MOVE_SPD;
+          this.baseCrit = 5;
+          this.equipment = { head: null, body: null, feet: null, weapon: null };
+          this.inventory = [];
+          this.consumables = [];
+          this.talents = {};
+          this.talentPoints = 0;
+          this.tempBuffs = { atk: 0, spd: 0 };
+          this.shieldHits = 0;
+          this.phoenixUsed = false;
+          this.kills = 0;
+          this.totalGold = 0;
+        },
+      };
+      function getTalentRank(id) {
+        return PD.talents[id] || 0;
+      }
+      function getStats() {
+        let s = {
+          maxHp: PD.maxHp,
+          attack: PD.baseAttack,
+          defense: PD.baseDefense,
+          speed: PD.baseSpeed,
+          crit: PD.baseCrit,
+          regen: 0,
+          thorns: 0,
+          doubleJump: false,
+          fireAura: 0,
+          lifesteal: 0,
+          dashCdReduce: 0,
+          goldBonus: 0,
+        };
+        s.maxHp += (PD.level - 1) * 10;
+        s.attack += PD.level - 1;
+        s.defense += Math.floor((PD.level - 1) * 0.5);
+        let sc = {};
+        for (let slot in PD.equipment) {
+          let it = PD.equipment[slot];
+          if (!it) continue;
+          for (let k in it.stats) if (s[k] !== undefined) s[k] += it.stats[k];
+          sc[it.set] = (sc[it.set] || 0) + 1;
+        }
+        for (let sn in sc) {
+          let c = sc[sn],
+            b = SET_BONUSES[sn];
+          if (!b) continue;
+          for (let t in b)
+            if (c >= parseInt(t)) {
+              let bo = b[t];
+              for (let k in bo)
+                if (k !== "label" && s[k] !== undefined) {
+                  if (typeof s[k] === "boolean") s[k] = bo[k];
+                  else s[k] += bo[k];
+                }
+            }
+        }
+        for (let tal of TALENTS) {
+          let r = getTalentRank(tal.id);
+          if (r > 0)
+            for (let k in tal.effect)
+              if (s[k] !== undefined) s[k] += tal.effect[k] * r;
+        }
+        s.attack += PD.tempBuffs.atk;
+        s.speed += PD.tempBuffs.spd;
+        return s;
+      }
+      function addXP(a) {
+        PD.xp += a;
+        let l = false;
+        while (PD.xp >= PD.xpToNext) {
+          PD.xp -= PD.xpToNext;
+          PD.level++;
+          PD.xpToNext = PD.level * 100;
+          PD.talentPoints++;
+          l = true;
+        }
+        if (l) {
+          let st = getStats();
+          PD.maxHp = st.maxHp;
+          PD.hp = PD.maxHp;
+        }
+        return l;
+      }
+      function getSetBonusLabels() {
+        let labels = [],
+          sc = {};
+        for (let slot in PD.equipment) {
+          let it = PD.equipment[slot];
+          if (it) sc[it.set] = (sc[it.set] || 0) + 1;
+        }
+        for (let sn in sc) {
+          let c = sc[sn],
+            b = SET_BONUSES[sn];
+          if (!b) continue;
+          for (let t in b) if (c >= parseInt(t)) labels.push(b[t].label);
+        }
+        return labels;
+      }
+
+      // ==================== LEVEL GENERATION SYSTEM ====================
+      function isSolid(v) {
+        return v === 1 || v === 2 || v === 3 || v === 6;
+      }
+
+      function floodReachable(map, startR, startC) {
+        let visited = new Set();
+        let key = (r, c) => r * COLS + c;
+        let queue = [key(startR, startC)];
+        visited.add(key(startR, startC));
+
+        let canPass = (r, c) => {
+          if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return false;
+          return !isSolid(map[r][c]);
+        };
+        let solidBelow = (r, c) => {
+          if (r + 1 >= ROWS) return true;
+          return isSolid(map[r + 1][c]);
+        };
+        let canStandAt = (r, c) => {
+          if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return false;
+          if (isSolid(map[r][c])) return false;
+          if (solidBelow(r, c)) return true;
+          if (map[r][c] === 5) return true;
+          return false;
+        };
+        let landingRow = (r, c) => {
+          let lr = r;
+          while (lr < ROWS - 1 && !isSolid(map[lr + 1][c]) && map[lr][c] !== 5)
+            lr++;
+          return lr;
+        };
+
+        while (queue.length > 0) {
+          let k = queue.shift();
+          let r = Math.floor(k / COLS),
+            c = k % COLS;
+
+          let tryAdd = (nr, nc) => {
+            if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) return;
+            let nk = key(nr, nc);
+            if (visited.has(nk)) return;
+            if (isSolid(map[nr][nc])) return;
+            visited.add(nk);
+            queue.push(nk);
+          };
+
+          // Ladder climbing
+          if (map[r][c] === 5) {
+            if (r > 0 && canPass(r - 1, c)) tryAdd(r - 1, c);
+            if (r < ROWS - 1 && canPass(r + 1, c)) tryAdd(r + 1, c);
+            tryAdd(r, c - 1);
+            tryAdd(r, c + 1);
+          }
+
+          if (!canStandAt(r, c) && map[r][c] !== 5) {
+            // falling
+            let lr = landingRow(r, c);
+            if (lr !== r && canPass(lr, c)) tryAdd(lr, c);
+            continue;
+          }
+
+          // Walk left/right
+          for (let dc of [-1, 1]) {
+            let nc = c + dc;
+            if (nc < 1 || nc >= COLS - 1) continue;
+            if (!canPass(r, nc)) continue;
+            let lr = landingRow(r, nc);
+            tryAdd(lr, nc);
+          }
+
+          // Jump: simulate arc
+          // At JUMP_VEL=-400, GRAVITY=900, max height ~3.5 tiles, hang time ~0.89s
+          // Horizontal speed=160, max horizontal ~5 tiles
+          // We check all reachable (dr,dc) within the jump envelope
+          for (let dy = 0; dy <= 4; dy++) {
+            let jumpR = r - dy;
+            if (jumpR < 1) break;
+            // Check vertical path is clear
+            let blocked = false;
+            for (let checkR = r - 1; checkR >= jumpR; checkR--) {
+              if (!canPass(checkR, c)) {
+                blocked = true;
+                break;
+              }
+            }
+            if (blocked) break;
+
+            // Horizontal reach increases with height, then decreases
+            // At peak (dy=3-4), max dx~5. At dy=0-1, max dx~2
+            let maxDx;
+            if (dy <= 1) maxDx = 2;
+            else if (dy <= 2) maxDx = 4;
+            else maxDx = 5;
+
+            for (let dx = -maxDx; dx <= maxDx; dx++) {
+              let nc = c + dx;
+              if (nc < 1 || nc >= COLS - 1) continue;
+              if (!canPass(jumpR, nc)) continue;
+
+              // Check horizontal path is roughly clear
+              let pathClear = true;
+              let stepC = c;
+              let stepDir = dx > 0 ? 1 : -1;
+              for (let s = 0; s < Math.abs(dx); s++) {
+                stepC += stepDir;
+                // Check at both current row and jump row
+                if (!canPass(r, stepC) && !canPass(jumpR, stepC)) {
+                  pathClear = false;
+                  break;
+                }
+              }
+              if (!pathClear) continue;
+
+              // Land: fall from (jumpR, nc) down
+              let lr = landingRow(jumpR, nc);
+              if (canPass(lr, nc)) tryAdd(lr, nc);
+              // Also add the jump point itself for ladder access
+              tryAdd(jumpR, nc);
+            }
+          }
+        }
+        return visited;
+      }
+
+      function generateMapData() {
+        let map = [];
+        for (let r = 0; r < ROWS; r++) {
+          map[r] = [];
+          for (let c = 0; c < COLS; c++) map[r][c] = 0;
+        }
+
+        // Solid borders
+        for (let c = 0; c < COLS; c++) {
+          map[0][c] = 2;
+          map[ROWS - 1][c] = 1;
+        }
+        for (let r = 0; r < ROWS; r++) {
+          map[r][0] = 2;
+          map[r][COLS - 1] = 2;
+        }
+
+        // Ground floor with small pits
+        for (let c = 1; c < COLS - 1; c++) map[ROWS - 2][c] = 1;
+        let pits = 1 + Math.floor(PD.floor / 5);
+        for (let i = 0; i < pits; i++) {
+          let pw = 2 + Math.floor(Math.random() * 2);
+          let pc = 8 + Math.floor(Math.random() * (COLS - 16));
+          for (let c = pc; c < pc + pw && c < COLS - 2; c++)
+            map[ROWS - 2][c] = 0;
+          // put spikes at pit bottom? no, just leave empty
+        }
+
+        // Build platform layers bottom to top
+        // Key constraint: step height 2-3 (jumpable), gap width 2-4 (jumpable)
+        let layerRows = [];
+        let y = ROWS - 5; // first layer 3 above ground
+
+        while (y > 3) {
+          layerRows.push(y);
+          let step = 2 + Math.floor(Math.random() * 2); // 2-3
+          y -= step;
+        }
+
+        // For each layer, place platform segments
+        let allSegments = []; // {r, c, w}
+        for (let ly of layerRows) {
+          let c = 1 + Math.floor(Math.random() * 3);
+          while (c < COLS - 3) {
+            let pw = 3 + Math.floor(Math.random() * 6);
+            if (c + pw > COLS - 2) pw = COLS - 2 - c;
+            if (pw < 2) break;
+
+            // Slight height variation: 30% chance +-1
+            let actualY = ly;
+            if (Math.random() < 0.3) {
+              let shift = Math.random() < 0.5 ? -1 : 1;
+              let ny = ly + shift;
+              if (ny > 2 && ny < ROWS - 3) actualY = ny;
+            }
+
+            for (let cc = c; cc < c + pw; cc++) {
+              if (map[actualY][cc] === 0) map[actualY][cc] = 3;
+            }
+            allSegments.push({ r: actualY, c: c, w: pw });
+
+            let gap = 2 + Math.floor(Math.random() * 3);
+            c += pw + gap;
+          }
+        }
+
+        // Add some terrain features: short walls, pillars
+        let featureCount = 2 + Math.floor(Math.random() * 3);
+        for (let i = 0; i < featureCount; i++) {
+          let fc = 5 + Math.floor(Math.random() * (COLS - 10));
+          let fr = 5 + Math.floor(Math.random() * (ROWS - 10));
+          let fh = 2 + Math.floor(Math.random() * 3);
+          for (let r = fr; r < fr + fh && r < ROWS - 2; r++) {
+            if (map[r][fc] === 0) map[r][fc] = 1;
+          }
+        }
+
+        // Add ladders: connect each layer to the one below
+        // First, identify which segments on each layer are NOT reachable by jump from below
+        for (let li = 0; li < layerRows.length; li++) {
+          let layerR = layerRows[li];
+          let belowR = li === 0 ? ROWS - 2 : layerRows[li - 1];
+          let heightDiff = belowR - layerR;
+
+          // Find segments on this layer
+          let layerSegs = allSegments.filter(
+            (s) => Math.abs(s.r - layerR) <= 1,
+          );
+
+          for (let seg of layerSegs) {
+            // Check if reachable by jump from any segment below
+            let belowSegs =
+              li === 0
+                ? [{ r: ROWS - 2, c: 1, w: COLS - 2 }]
+                : allSegments.filter((s) => Math.abs(s.r - belowR) <= 1);
+            let reachable = false;
+            for (let bs of belowSegs) {
+              let hDiff = bs.r - seg.r;
+              if (hDiff < 0 || hDiff > 4) continue;
+              let bLeft = bs.c,
+                bRight = bs.c + bs.w;
+              let sLeft = seg.c,
+                sRight = seg.c + seg.w;
+              let hDist = 0;
+              if (sRight <= bLeft) hDist = bLeft - sRight;
+              else if (sLeft >= bRight) hDist = sLeft - bRight;
+              if (hDist <= 5 && hDiff <= 3) {
+                reachable = true;
+                break;
+              }
+            }
+
+            if (!reachable) {
+              // Add ladder
+              let lc = seg.c + Math.floor(seg.w / 2);
+              if (lc < 2) lc = 2;
+              if (lc > COLS - 3) lc = COLS - 3;
+              for (let r = seg.r; r <= belowR && r < ROWS - 1; r++) {
+                if (map[r][lc] === 0) map[r][lc] = 5;
+                else if (isSolid(map[r][lc])) break;
+              }
+            }
+          }
+        }
+
+        // Add extra ladders/ropes for variety
+        let extraLadders = 2 + Math.floor(Math.random() * 3);
+        for (let i = 0; i < extraLadders; i++) {
+          let lc = 3 + Math.floor(Math.random() * (COLS - 6));
+          // Find a platform in this column
+          for (let r = 3; r < ROWS - 4; r++) {
+            if (map[r][lc] === 3 && map[r + 1][lc] === 0) {
+              let ropeLen = 3 + Math.floor(Math.random() * 5);
+              for (
+                let rr = r + 1;
+                rr < r + 1 + ropeLen && rr < ROWS - 2;
+                rr++
+              ) {
+                if (map[rr][lc] === 0) map[rr][lc] = 5;
+                else break;
+              }
+              break;
+            }
+          }
+        }
+
+        // Ground-to-first-layer ladders
+        let groundLadders = 2 + Math.floor(Math.random() * 2);
+        for (let i = 0; i < groundLadders; i++) {
+          let lc = 4 + Math.floor(Math.random() * (COLS - 8));
+          if (layerRows.length > 0) {
+            let targetR = layerRows[0];
+            for (let r = targetR; r < ROWS - 2; r++) {
+              if (map[r][lc] === 0) map[r][lc] = 5;
+              else if (isSolid(map[r][lc])) break;
+            }
+          }
+        }
+
+        // Add spikes
+        let spkCh = 0.01 + PD.floor * 0.004;
+        for (let r = 2; r < ROWS - 2; r++) {
+          for (let c = 3; c < COLS - 3; c++) {
+            if (
+              isSolid(map[r][c]) &&
+              r > 1 &&
+              map[r - 1][c] === 0 &&
+              Math.random() < spkCh
+            ) {
+              if (r >= ROWS - 4 && c < 7) continue;
+              map[r - 1][c] = 4;
+            }
+          }
+        }
+
+        return map;
+      }
+
+      function validateLevel(map) {
+        // Find player start: ground level, left side, clear space
+        let playerC = 3,
+          playerR = -1;
+        for (let r = 1; r < ROWS; r++) {
+          if (isSolid(map[r][playerC]) && !isSolid(map[r - 1][playerC])) {
+            playerR = r - 1;
+            break;
+          }
+        }
+        if (playerR === -1) return null;
+
+        // Clear player spawn area
+        for (let r = Math.max(1, playerR - 2); r <= playerR; r++) {
+          for (
+            let c = Math.max(1, playerC - 1);
+            c <= Math.min(COLS - 2, playerC + 1);
+            c++
+          ) {
+            if (map[r][c] !== 5) map[r][c] = 0;
+          }
+        }
+        if (!isSolid(map[playerR + 1][playerC])) map[playerR + 1][playerC] = 1;
+
+        // Find exit: prefer high platform on right side
+        let exitR = -1,
+          exitC = -1;
+        for (let r = 3; r < ROWS - 3; r++) {
+          for (let c = COLS - 3; c > Math.floor(COLS / 2); c--) {
+            if (
+              isSolid(map[r][c]) &&
+              map[r - 1][c] === 0 &&
+              (r < 2 || map[r - 2][c] === 0)
+            ) {
+              exitR = r - 1;
+              exitC = c;
+              r = ROWS;
+              break;
+            }
+          }
+        }
+        if (exitR === -1) {
+          exitC = COLS - 5;
+          for (let r = 1; r < ROWS; r++) {
+            if (isSolid(map[r][exitC]) && !isSolid(map[r - 1][exitC])) {
+              exitR = r - 1;
+              break;
+            }
+          }
+        }
+        if (exitR === -1) return null;
+
+        // Clear exit area
+        map[exitR][exitC] = 0;
+        if (exitR > 1) map[exitR - 1][exitC] = 0;
+
+        // Check reachability
+        let reachable = floodReachable(map, playerR, playerC);
+        let exitKey = exitR * COLS + exitC;
+
+        if (!reachable.has(exitKey)) {
+          // Try fix: add ladder from exit down to reachable area
+          let fixed = false;
+          for (let r = exitR; r < ROWS - 1; r++) {
+            if (reachable.has(r * COLS + exitC)) {
+              for (let rr = exitR; rr <= r; rr++) {
+                if (map[rr][exitC] === 0) map[rr][exitC] = 5;
+              }
+              fixed = true;
+              break;
+            }
+          }
+          if (!fixed) {
+            // Try multiple columns near exit
+            for (let dc = -3; dc <= 3 && !fixed; dc++) {
+              let tc = exitC + dc;
+              if (tc < 2 || tc >= COLS - 2) continue;
+              for (let r = exitR; r < ROWS - 1; r++) {
+                if (reachable.has(r * COLS + tc)) {
+                  // Ladder at tc from exitR to r
+                  for (let rr = exitR; rr <= r; rr++) {
+                    if (map[rr][tc] === 0) map[rr][tc] = 5;
+                  }
+                  // Also horizontal connection at exitR
+                  let minC = Math.min(tc, exitC),
+                    maxC = Math.max(tc, exitC);
+                  for (let cc = minC; cc <= maxC; cc++) {
+                    if (map[exitR][cc] === 0) map[exitR][cc] = 3;
+                  }
+                  map[exitR][exitC] = 0;
+                  fixed = true;
+                  break;
+                }
+              }
+            }
+          }
+          if (!fixed) {
+            for (let r = exitR; r < ROWS - 1; r++) {
+              if (map[r][exitC] === 0) map[r][exitC] = 5;
+              else if (isSolid(map[r][exitC])) break;
+            }
+          }
+
+          reachable = floodReachable(map, playerR, playerC);
+          if (!reachable.has(exitKey)) return null;
+        }
+
+        // Collect valid spots for enemies, items, coins, chests
+        let enemySpots = [],
+          itemSpots = [],
+          coinSpots = [];
+        for (let r = 2; r < ROWS - 2; r++) {
+          for (let c = 2; c < COLS - 2; c++) {
+            if (!reachable.has(r * COLS + c)) continue;
+            if (map[r][c] !== 0) continue;
+            if (r + 1 >= ROWS || !isSolid(map[r + 1][c])) continue;
+            if (Math.abs(r - playerR) < 3 && Math.abs(c - playerC) < 4)
+              continue;
+            if (Math.abs(r - exitR) < 2 && Math.abs(c - exitC) < 2) continue;
+            enemySpots.push({ r, c });
+            if (map[r - 1] && map[r - 1][c] === 0) itemSpots.push({ r, c });
+            coinSpots.push({ r, c });
+          }
+        }
+
+        if (enemySpots.length < 3) return null;
+
+        return {
+          valid: true,
+          playerR,
+          playerC,
+          exitR,
+          exitC,
+          enemySpots,
+          itemSpots,
+          coinSpots,
+          reachable,
+        };
+      }
+
+      function generateFallbackMap() {
+        let map = [];
+        for (let r = 0; r < ROWS; r++) {
+          map[r] = [];
+          for (let c = 0; c < COLS; c++) map[r][c] = 0;
+        }
+        for (let c = 0; c < COLS; c++) {
+          map[0][c] = 2;
+          map[ROWS - 1][c] = 1;
+        }
+        for (let r = 0; r < ROWS; r++) {
+          map[r][0] = 2;
+          map[r][COLS - 1] = 2;
+        }
+        for (let c = 1; c < COLS - 1; c++) map[ROWS - 2][c] = 1;
+        let y = ROWS - 5,
+          x = 4,
+          dir = 1;
+        while (y > 3) {
+          for (let c = x; c < x + 7 && c < COLS - 2; c++) map[y][c] = 3;
+          for (let r = y; r < y + 3 && r < ROWS - 2; r++) {
+            if (map[r][x + 3] === 0) map[r][x + 3] = 5;
+          }
+          x += dir * 12;
+          if (x > COLS - 12) {
+            dir = -1;
+            x = COLS - 12;
+          }
+          if (x < 3) {
+            dir = 1;
+            x = 3;
+          }
+          y -= 3;
+        }
+        return map;
+      }
+      // ==================== END LEVEL GENERATION ====================
+
+      class BootScene extends Phaser.Scene {
+        constructor() {
+          super("BootScene");
+        }
+        create() {
+          const g = this.make.graphics({ x: 0, y: 0, add: false });
+          g.clear();
+          g.fillStyle(0x3399ff);
+          g.fillRect(6, 0, 20, 32);
+          g.fillStyle(0xffcc99);
+          g.fillRect(9, 2, 14, 10);
+          g.fillStyle(0x2266cc);
+          g.fillRect(8, 12, 16, 14);
+          g.fillStyle(0x1a4d99);
+          g.fillRect(8, 26, 6, 6);
+          g.fillRect(18, 26, 6, 6);
+          g.generateTexture("player", 32, 32);
+          g.clear();
+          g.fillStyle(0x3399ff);
+          g.fillRect(6, 0, 20, 32);
+          g.fillStyle(0xffcc99);
+          g.fillRect(9, 2, 14, 10);
+          g.fillStyle(0x2266cc);
+          g.fillRect(4, 12, 10, 14);
+          g.fillRect(18, 12, 10, 14);
+          g.fillStyle(0x1a4d99);
+          g.fillRect(6, 26, 8, 6);
+          g.fillRect(18, 26, 8, 6);
+          g.generateTexture("player_walk1", 32, 32);
+          g.clear();
+          g.fillStyle(0x3399ff);
+          g.fillRect(6, 2, 20, 28);
+          g.fillStyle(0xffcc99);
+          g.fillRect(9, 4, 14, 10);
+          g.fillStyle(0x2266cc);
+          g.fillRect(8, 14, 16, 12);
+          g.fillStyle(0x1a4d99);
+          g.fillRect(8, 26, 6, 4);
+          g.fillRect(18, 26, 6, 4);
+          g.generateTexture("player_jump", 32, 32);
+          for (let bk in BIOMES) {
+            let bi = BIOMES[bk];
+            g.clear();
+            g.fillStyle(bi.ground);
+            g.fillRect(0, 0, 32, 32);
+            g.fillStyle(
+              Phaser.Display.Color.IntegerToColor(bi.ground).darken(15).color,
+            );
+            g.fillRect(0, 0, 16, 16);
+            g.fillRect(16, 16, 16, 16);
+            g.generateTexture("ground_" + bk, 32, 32);
+            g.clear();
+            g.fillStyle(bi.wall);
+            g.fillRect(0, 0, 32, 32);
+            g.fillStyle(
+              Phaser.Display.Color.IntegerToColor(bi.wall).darken(15).color,
+            );
+            g.fillRect(0, 0, 16, 16);
+            g.fillRect(16, 16, 16, 16);
+            g.generateTexture("wall_" + bk, 32, 32);
+            g.clear();
+            g.fillStyle(bi.platform);
+            g.fillRect(0, 0, 32, 32);
+            g.fillStyle(
+              Phaser.Display.Color.IntegerToColor(bi.platform).lighten(15)
+                .color,
+            );
+            g.fillRect(0, 0, 32, 8);
+            g.generateTexture("platform_" + bk, 32, 32);
+          }
+          g.clear();
+          g.fillStyle(0xaaaaaa);
+          g.fillTriangle(4, 32, 16, 4, 28, 32);
+          g.generateTexture("spike", 32, 32);
+          g.clear();
+          g.fillStyle(0xffdd00);
+          g.fillCircle(8, 8, 7);
+          g.generateTexture("coin", 16, 16);
+          g.clear();
+          g.fillStyle(0x885522);
+          g.fillRect(0, 6, 24, 18);
+          g.fillStyle(0xaa7733);
+          g.fillRect(0, 6, 24, 6);
+          g.fillStyle(0xffdd00);
+          g.fillRect(9, 10, 6, 6);
+          g.generateTexture("chest", 24, 24);
+          g.clear();
+          g.fillStyle(0x224488);
+          g.fillRect(0, 0, 28, 36);
+          g.fillStyle(0x3366aa);
+          g.fillRect(2, 2, 24, 32);
+          g.fillStyle(0xffdd00);
+          g.fillCircle(20, 20, 3);
+          g.generateTexture("exit", 28, 36);
+          g.clear();
+          g.fillStyle(0xffffff);
+          g.fillRect(2, 2, 12, 12);
+          g.fillStyle(0x44aaff);
+          g.fillRect(4, 4, 8, 8);
+          g.generateTexture("itemdrop", 16, 16);
+          g.clear();
+          g.fillStyle(0xffffff, 0.8);
+          g.fillRect(0, 0, 36, 10);
+          g.generateTexture("slash", 36, 10);
+          g.clear();
+          g.fillStyle(0xff8800, 0.6);
+          g.fillCircle(24, 24, 24);
+          g.generateTexture("explosion", 48, 48);
+          g.clear();
+          g.fillStyle(0x44aaff, 0.5);
+          g.fillCircle(16, 16, 16);
+          g.generateTexture("shield_fx", 32, 32);
+          g.clear();
+          g.fillStyle(0x775533);
+          g.fillRect(0, 0, 8, 32);
+          g.fillStyle(0x886644);
+          g.fillRect(1, 0, 6, 32);
+          g.generateTexture("ladder", 8, 32);
+          g.clear();
+          g.fillStyle(0x996633);
+          g.fillRect(0, 0, 32, 32);
+          g.fillStyle(0x664422);
+          g.fillRect(4, 4, 24, 24);
+          g.generateTexture("breakable", 32, 32);
+          for (let en in ENEMY_DEFS) {
+            let ed = ENEMY_DEFS[en];
+            g.clear();
+            g.fillStyle(ed.color);
+            g.fillRect(0, 0, ed.w, ed.h);
+            g.fillStyle(0xffffff);
+            g.fillRect(Math.floor(ed.w * 0.2), Math.floor(ed.h * 0.2), 4, 4);
+            g.fillRect(Math.floor(ed.w * 0.6), Math.floor(ed.h * 0.2), 4, 4);
+            g.fillStyle(0);
+            g.fillRect(Math.floor(ed.w * 0.25), Math.floor(ed.h * 0.25), 2, 2);
+            g.fillRect(Math.floor(ed.w * 0.65), Math.floor(ed.h * 0.25), 2, 2);
+            g.generateTexture(en, ed.w, ed.h);
+          }
+          for (let bn in BOSS_DEFS) {
+            let bd = BOSS_DEFS[bn];
+            g.clear();
+            g.fillStyle(bd.color);
+            g.fillRect(0, 0, bd.w, bd.h);
+            g.fillStyle(0xffffff);
+            g.fillRect(Math.floor(bd.w * 0.15), Math.floor(bd.h * 0.15), 6, 6);
+            g.fillRect(Math.floor(bd.w * 0.6), Math.floor(bd.h * 0.15), 6, 6);
+            g.fillStyle(0xff0000);
+            g.fillRect(Math.floor(bd.w * 0.2), Math.floor(bd.h * 0.2), 4, 3);
+            g.fillRect(Math.floor(bd.w * 0.65), Math.floor(bd.h * 0.2), 4, 3);
+            g.generateTexture(bn, bd.w, bd.h);
+          }
+          for (let con of CONSUMABLES) {
+            g.clear();
+            g.fillStyle(con.icon);
+            g.fillCircle(8, 8, 7);
+            g.generateTexture("cons_" + con.id, 16, 16);
+          }
+          g.clear();
+          g.fillStyle(0xffffff, 0.1);
+          for (let i = 0; i < 30; i++)
+            g.fillCircle(
+              Math.random() * 800,
+              Math.random() * 600,
+              1 + Math.random() * 2,
+            );
+          g.generateTexture("parallax_stars", 800, 600);
+          g.clear();
+          g.fillStyle(0x333355, 0.2);
+          g.fillRect(0, 300, 800, 300);
+          g.generateTexture("parallax_bg", 800, 600);
+          g.destroy();
+          this.scene.start("MenuScene");
+        }
+      }
+
+      class MenuScene extends Phaser.Scene {
+        constructor() {
+          super("MenuScene");
+        }
+        create() {
+          this.cameras.main.setBackgroundColor("#0a0a1a");
+          this.add.image(400, 300, "parallax_stars").setAlpha(0.5);
+          this.add
+            .text(400, 100, "DUNGEON DELVER", {
+              fontSize: "48px",
+              fill: "#ffdd44",
+              fontFamily: "monospace",
+              fontStyle: "bold",
+              stroke: "#000",
+              strokeThickness: 6,
+            })
+            .setOrigin(0.5);
+          this.add
+            .text(400, 155, "Roguelike Platformer", {
+              fontSize: "16px",
+              fill: "#aaaacc",
+              fontFamily: "monospace",
+            })
+            .setOrigin(0.5);
+          let start = this.add
+            .text(400, 260, "[ START GAME ]", {
+              fontSize: "28px",
+              fill: "#55ff55",
+              fontFamily: "monospace",
+            })
+            .setOrigin(0.5)
+            .setInteractive({ useHandCursor: true });
+          start.on("pointerover", () => start.setFill("#88ff88"));
+          start.on("pointerout", () => start.setFill("#55ff55"));
+          start.on("pointerdown", () => {
+            PD.reset();
+            this.scene.start("GameScene");
+          });
+          [
+            "Arrows/WASD: Move & Jump",
+            "Z/J: Attack   X/K: Dash",
+            "1-4: Consumables",
+            "Collect equipment sets!",
+            "Boss every 5 floors!",
+          ].forEach((t, i) =>
+            this.add
+              .text(400, 370 + i * 22, t, {
+                fontSize: "13px",
+                fill: "#7777aa",
+                fontFamily: "monospace",
+              })
+              .setOrigin(0.5),
+          );
+        }
+      }
+
+      class GameScene extends Phaser.Scene {
+        constructor() {
+          super("GameScene");
+        }
+
+        create() {
+          this.gameOver = false;
+          this.attackTimer = 0;
+          this.invTimer = 0;
+          this.regenTimer = 0;
+          this.auraTimer = 0;
+          this.dashTimer = 0;
+          this.dashCooldown = 0;
+          this.extraJumps = 0;
+          this.facingRight = true;
+          this.walkFrame = 0;
+          this.walkTimer = 0;
+          this._exitMsgCd = 0;
+          this.isBossFloor = getBoss(PD.floor) !== null;
+          let biome = getBiome(PD.floor);
+          this.currentBiome = biome;
+          this.biomeKey = Object.keys(BIOMES).find((k) => BIOMES[k] === biome);
+          this.cameras.main.setBackgroundColor(biome.bg);
+          this.physics.world.setBounds(0, 0, WORLD_W, WORLD_H);
+          this.cameras.main.setBounds(0, 0, WORLD_W, WORLD_H);
+          this.add
+            .image(400, 300, "parallax_stars")
+            .setScrollFactor(0.05)
+            .setAlpha(0.3)
+            .setDepth(-3);
+          this.add
+            .image(400, 300, "parallax_bg")
+            .setScrollFactor(0.15)
+            .setAlpha(0.2)
+            .setDepth(-2);
+          this.platforms = this.physics.add.staticGroup();
+          this.spikes = this.physics.add.staticGroup();
+          this.ladders = this.physics.add.staticGroup();
+          this.breakables = this.physics.add.staticGroup();
+
+          // Generate and validate level
+          let levelData = null;
+          for (let attempt = 0; attempt < 50; attempt++) {
+            this.platforms.clear(true, true);
+            this.spikes.clear(true, true);
+            this.ladders.clear(true, true);
+            this.breakables.clear(true, true);
+            let map = generateMapData();
+            let v = validateLevel(map);
+            if (v && v.valid) {
+              levelData = { map, v };
+              break;
+            }
+          }
+          if (!levelData) {
+            this.platforms.clear(true, true);
+            this.spikes.clear(true, true);
+            this.ladders.clear(true, true);
+            this.breakables.clear(true, true);
+            let map = generateFallbackMap();
+            let playerR = ROWS - 3,
+              playerC = 3,
+              exitR = ROWS - 3,
+              exitC = COLS - 5;
+            levelData = {
+              map,
+              v: {
+                valid: true,
+                playerR,
+                playerC,
+                exitR,
+                exitC,
+                enemySpots: [
+                  { r: ROWS - 3, c: 20 },
+                  { r: ROWS - 3, c: 30 },
+                  { r: ROWS - 3, c: 40 },
+                ],
+                itemSpots: [],
+                coinSpots: [{ r: ROWS - 3, c: 15 }],
+                reachable: new Set(),
+              },
+            };
+          }
+
+          let map = levelData.map;
+          let v = levelData.v;
+          this.mapData = map;
+          this.validEnemySpots = v.enemySpots;
+          this.validItemSpots = v.itemSpots;
+          this.validCoinSpots = v.coinSpots;
+
+          // Add breakables at valid item spots
+          let bc2 = 2 + Math.floor(PD.floor * 0.5);
+          let breakSpots = [...this.validItemSpots];
+          Phaser.Utils.Array.Shuffle(breakSpots);
+          for (let i = 0; i < bc2 && breakSpots.length > 0; i++) {
+            let spot = breakSpots.pop();
+            if (map[spot.r][spot.c] === 0) map[spot.r][spot.c] = 6;
+          }
+
+          // Build tile sprites
+          let bk = this.biomeKey;
+          for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+              let tx = c * TW + TW / 2,
+                ty = r * TH + TH / 2;
+              switch (map[r][c]) {
+                case 1:
+                  this.platforms.create(tx, ty, "ground_" + bk);
+                  break;
+                case 2:
+                  this.platforms.create(tx, ty, "wall_" + bk);
+                  break;
+                case 3:
+                  this.platforms.create(tx, ty, "platform_" + bk);
+                  break;
+                case 4: {
+                  let sp = this.spikes.create(tx, ty, "spike");
+                  sp.body.setSize(24, 12);
+                  sp.body.setOffset(4, 20);
+                  break;
+                }
+                case 5: {
+                  let ld = this.ladders.create(tx, ty, "ladder");
+                  ld.body.setSize(8, 32);
+                  ld.setAlpha(0.7);
+                  break;
+                }
+                case 6: {
+                  let br = this.breakables.create(tx, ty, "breakable");
+                  br.hp = 3;
+                  break;
+                }
+              }
+            }
+          }
+
+          this.platformRows = [];
+          for (let r = 2; r < ROWS - 2; r++) {
+            for (let c = 1; c < COLS - 1; c++) {
+              if (map[r][c] === 3) {
+                this.platformRows.push(r);
+                break;
+              }
+            }
+          }
+
+          let stats = getStats();
+          PD.maxHp = stats.maxHp;
+          if (PD.hp > PD.maxHp) PD.hp = PD.maxHp;
+
+          this.player = this.physics.add.sprite(
+            v.playerC * TW + TW / 2,
+            v.playerR * TH + TH / 2,
+            "player",
+          );
+          this.player.setCollideWorldBounds(true);
+          this.player.body.setSize(16, 24);
+          this.player.body.setOffset(8, 8);
+          this.player.setDepth(10);
+
+          this.exit = this.physics.add.sprite(
+            v.exitC * TW + TW / 2,
+            v.exitR * TH + TH / 2,
+            "exit",
+          );
+          this.exit.body.setAllowGravity(false);
+          this.exit.body.setImmovable(true);
+          this.exit.setDepth(5);
+
+          this.enemies = this.physics.add.group();
+          if (this.isBossFloor) this.spawnBoss();
+          else this.spawnEnemies();
+
+          this.coins = this.physics.add.group();
+          this.chests = this.physics.add.staticGroup();
+          this.itemDrops = this.physics.add.group();
+          this.projectiles = this.physics.add.group();
+          this.spawnPickups();
+
+          this.shieldSprite = null;
+          if (PD.shieldHits > 0)
+            this.shieldSprite = this.add
+              .image(0, 0, "shield_fx")
+              .setAlpha(0.4)
+              .setDepth(11);
+
+          this.physics.add.collider(this.player, this.platforms);
+          this.physics.add.collider(this.player, this.breakables);
+          this.physics.add.collider(this.enemies, this.platforms);
+          this.physics.add.collider(this.enemies, this.breakables);
+          this.physics.add.collider(this.coins, this.platforms);
+          this.physics.add.collider(this.itemDrops, this.platforms);
+          this.physics.add.overlap(
+            this.player,
+            this.spikes,
+            this.hitSpike,
+            null,
+            this,
+          );
+          this.physics.add.overlap(
+            this.player,
+            this.enemies,
+            this.hitEnemy,
+            null,
+            this,
+          );
+          this.physics.add.overlap(
+            this.player,
+            this.coins,
+            this.collectCoin,
+            null,
+            this,
+          );
+          this.physics.add.overlap(
+            this.player,
+            this.chests,
+            this.openChest,
+            null,
+            this,
+          );
+          this.physics.add.overlap(
+            this.player,
+            this.itemDrops,
+            this.collectItem,
+            null,
+            this,
+          );
+          this.physics.add.overlap(
+            this.player,
+            this.exit,
+            this.reachExit,
+            null,
+            this,
+          );
+          this.physics.add.overlap(
+            this.player,
+            this.projectiles,
+            this.hitProjectile,
+            null,
+            this,
+          );
+
+          this.cursors = this.input.keyboard.createCursorKeys();
+          this.keys = this.input.keyboard.addKeys({
+            w: "W",
+            a: "A",
+            s: "S",
+            d: "D",
+            z: "Z",
+            j: "J",
+            x: "X",
+            k: "K",
+            one: "ONE",
+            two: "TWO",
+            three: "THREE",
+            four: "FOUR",
+          });
+          this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
+          this.cameras.main.setDeadzone(60, 40);
+          this.createHUD();
+
+          let fn =
+            biome.name +
+            " - Floor " +
+            PD.floor +
+            (this.isBossFloor ? " [BOSS]" : "");
+          let ft = this.add
+            .text(400, 280, fn, {
+              fontSize: "28px",
+              fill: "#ffdd44",
+              fontFamily: "monospace",
+              fontStyle: "bold",
+              stroke: "#000",
+              strokeThickness: 5,
+            })
+            .setOrigin(0.5)
+            .setScrollFactor(0)
+            .setDepth(100);
+          this.tweens.add({
+            targets: ft,
+            alpha: 0,
+            y: 240,
+            duration: 2500,
+            onComplete: () => ft.destroy(),
+          });
+          this.cameras.main.fadeIn(400);
+        }
+
+        spawnEnemies() {
+          let count = 4 + PD.floor * 2;
+          let types = ["slime"];
+          if (PD.floor >= 2) types.push("bat");
+          if (PD.floor >= 4) types.push("skeleton");
+          if (PD.floor >= 7) types.push("ghost");
+          if (PD.floor >= 10) types.push("demon");
+          if (PD.floor >= 14) types.push("golem");
+          let spots = [...this.validEnemySpots];
+          Phaser.Utils.Array.Shuffle(spots);
+          for (let i = 0; i < count && spots.length > 0; i++) {
+            let spot = spots.pop();
+            let type = types[Math.floor(Math.random() * types.length)];
+            let ed = ENEMY_DEFS[type];
+            this.createEnemy(
+              type,
+              ed,
+              spot.c * TW + TW / 2,
+              spot.r * TH + TH / 2,
+            );
+          }
+        }
+
+        createEnemy(type, ed, px, py) {
+          let scale = 1 + PD.floor * 0.06;
+          let e = this.enemies.create(px, py, type);
+          e.etype = type;
+          e.ehp = Math.floor(ed.hp * scale);
+          e.emaxhp = e.ehp;
+          e.eattack = Math.floor(ed.attack * scale);
+          e.edefense = Math.floor(ed.defense * scale);
+          e.espeed = ed.speed;
+          e.exp = ed.xp + PD.floor * 3;
+          e.egold = ed.gold + PD.floor * 2;
+          e.dir = Math.random() < 0.5 ? 1 : -1;
+          e.moveTimer = 0;
+          e.hitFlash = 0;
+          e.attackCd = 0;
+          e.isBoss = false;
+          e.aggroed = false;
+          e.aggroRange = ed.aggroRange || 180;
+          e.body.setSize(ed.w - 4, ed.h - 4);
+          if (type === "bat" || type === "ghost") {
+            e.body.setAllowGravity(false);
+            e.baseY = py;
+            e.wavt = Math.random() * Math.PI * 2;
+          }
+          return e;
+        }
+
+        spawnBoss() {
+          let bt = getBoss(PD.floor),
+            bd = BOSS_DEFS[bt];
+          let spots = [...this.validEnemySpots];
+          Phaser.Utils.Array.Shuffle(spots);
+          let bossSpot =
+            spots.length > 0
+              ? spots.pop()
+              : { r: ROWS - 3, c: Math.floor(COLS / 2) };
+          let scale = 1 + Math.max(0, PD.floor - 5) * 0.08;
+          let e = this.enemies.create(
+            bossSpot.c * TW + TW / 2,
+            bossSpot.r * TH + TH / 2,
+            bt,
+          );
+          e.etype = bt;
+          e.ehp = Math.floor(bd.hp * scale);
+          e.emaxhp = e.ehp;
+          e.eattack = Math.floor(bd.attack * scale);
+          e.edefense = Math.floor(bd.defense * scale);
+          e.espeed = bd.speed;
+          e.exp = bd.xp;
+          e.egold = bd.gold;
+          e.dir = 1;
+          e.moveTimer = 0;
+          e.hitFlash = 0;
+          e.attackCd = 0;
+          e.isBoss = true;
+          e.bossName = bd.name;
+          e.aggroed = true;
+          e.aggroRange = 400;
+          e.body.setSize(bd.w - 4, bd.h - 4);
+          let addCount = 2 + Math.floor(PD.floor / 10);
+          let types = Object.keys(ENEMY_DEFS);
+          for (let i = 0; i < addCount && spots.length > 0; i++) {
+            let spot = spots.pop();
+            let t = types[Math.floor(Math.random() * types.length)];
+            this.createEnemy(
+              t,
+              ENEMY_DEFS[t],
+              spot.c * TW + TW / 2,
+              spot.r * TH + TH / 2,
+            );
+          }
+        }
+
+        spawnPickups() {
+          let coinSpots = [...(this.validCoinSpots || this.validEnemySpots)];
+          Phaser.Utils.Array.Shuffle(coinSpots);
+          let cc = Math.min(10 + PD.floor * 2, coinSpots.length);
+          for (let i = 0; i < cc; i++) {
+            let spot = coinSpots[i];
+            let c = this.coins.create(
+              spot.c * TW + TW / 2,
+              spot.r * TH + TH / 2,
+              "coin",
+            );
+            c.body.setSize(12, 12);
+            c.setBounce(0.3);
+            c.goldValue =
+              1 + Math.floor(Math.random() * 3) + Math.floor(PD.floor / 2);
+          }
+          let chestSpots = [...(this.validItemSpots || [])];
+          Phaser.Utils.Array.Shuffle(chestSpots);
+          let chc = Math.min(1 + Math.floor(PD.floor / 3), chestSpots.length);
+          for (let i = 0; i < chc; i++) {
+            let spot = chestSpots[i];
+            let ch = this.chests.create(
+              spot.c * TW + TW / 2,
+              spot.r * TH + TH / 2 - 4,
+              "chest",
+            );
+            ch.opened = false;
+          }
+        }
+
+        createHUD() {
+          this.add
+            .rectangle(120, 20, 204, 18, 0x000000, 0.5)
+            .setScrollFactor(0)
+            .setOrigin(0.5)
+            .setDepth(50);
+          this.hpBarFill = this.add
+            .rectangle(20, 12, 200, 14, 0xff3333)
+            .setScrollFactor(0)
+            .setOrigin(0, 0)
+            .setDepth(50);
+          this.hpText = this.add
+            .text(120, 20, "", {
+              fontSize: "11px",
+              fill: "#fff",
+              fontFamily: "monospace",
+              stroke: "#000",
+              strokeThickness: 2,
+            })
+            .setScrollFactor(0)
+            .setOrigin(0.5)
+            .setDepth(51);
+          this.add
+            .rectangle(120, 36, 204, 8, 0x000000, 0.5)
+            .setScrollFactor(0)
+            .setOrigin(0.5)
+            .setDepth(50);
+          this.xpBarFill = this.add
+            .rectangle(20, 33, 200, 6, 0x4444ff)
+            .setScrollFactor(0)
+            .setOrigin(0, 0)
+            .setDepth(50);
+          this.infoText = this.add
+            .text(10, 48, "", {
+              fontSize: "11px",
+              fill: "#ccc",
+              fontFamily: "monospace",
+              lineSpacing: 2,
+              stroke: "#000",
+              strokeThickness: 2,
+            })
+            .setScrollFactor(0)
+            .setDepth(51);
+          this.equipText = this.add
+            .text(10, 572, "", {
+              fontSize: "10px",
+              fill: "#adf",
+              fontFamily: "monospace",
+              stroke: "#000",
+              strokeThickness: 1,
+            })
+            .setScrollFactor(0)
+            .setDepth(51);
+          this.bonusText = this.add
+            .text(520, 572, "", {
+              fontSize: "10px",
+              fill: "#fc4",
+              fontFamily: "monospace",
+              stroke: "#000",
+              strokeThickness: 1,
+            })
+            .setScrollFactor(0)
+            .setDepth(51);
+          this.consumableText = this.add
+            .text(10, 556, "", {
+              fontSize: "10px",
+              fill: "#8fa",
+              fontFamily: "monospace",
+              stroke: "#000",
+              strokeThickness: 1,
+            })
+            .setScrollFactor(0)
+            .setDepth(51);
+        }
+
+        floatText(x, y, text, color = "#fff", size = "14px") {
+          let t = this.add
+            .text(x, y, text, {
+              fontSize: size,
+              fill: color,
+              fontFamily: "monospace",
+              fontStyle: "bold",
+              stroke: "#000",
+              strokeThickness: 3,
+            })
+            .setOrigin(0.5)
+            .setDepth(60);
+          this.tweens.add({
+            targets: t,
+            y: y - 45,
+            alpha: 0,
+            duration: 1200,
+            onComplete: () => t.destroy(),
+          });
+        }
+
+        hitSpike(player) {
+          if (this.invTimer > 0 || this.gameOver) return;
+          this.takeDamage(10 + PD.floor * 2);
+          player.setVelocityY(JUMP_VEL * 0.5);
+        }
+        hitProjectile(player, proj) {
+          if (this.invTimer > 0 || this.gameOver) return;
+          this.takeDamage(proj.damage || 5);
+          proj.destroy();
+        }
+
+        hitEnemy(player, enemy) {
+          if (this.invTimer > 0 || this.gameOver || !enemy.active) return;
+          if (this.dashTimer > 0) {
+            this.damageEnemy(enemy, Math.floor(getStats().attack * 0.5), false);
+            return;
+          }
+          enemy.aggroed = true;
+          let stats = getStats(),
+            dmg = Math.max(1, enemy.eattack - stats.defense);
+          if (stats.thorns > 0) this.damageEnemy(enemy, stats.thorns);
+          if (PD.shieldHits > 0) {
+            PD.shieldHits--;
+            dmg = 0;
+            this.floatText(player.x, player.y - 20, "BLOCKED!", "#44aaff");
+            if (PD.shieldHits <= 0 && this.shieldSprite) {
+              this.shieldSprite.destroy();
+              this.shieldSprite = null;
+            }
+          }
+          if (dmg > 0) this.takeDamage(dmg);
+          let kb = player.x < enemy.x ? -250 : 250;
+          player.setVelocityX(kb);
+          player.setVelocityY(-200);
+        }
+
+        takeDamage(dmg) {
+          PD.hp -= dmg;
+          this.floatText(
+            this.player.x,
+            this.player.y - 20,
+            "-" + dmg,
+            "#ff4444",
+          );
+          this.invTimer = 1.2;
+          this.player.setTint(0xff4444);
+          this.cameras.main.shake(120, 0.015);
+          if (PD.hp <= 0) {
+            PD.hp = 0;
+            let stats = getStats();
+            if (stats.fireAura > 0 && !PD.phoenixUsed) {
+              PD.phoenixUsed = true;
+              PD.hp = Math.floor(stats.maxHp * 0.5);
+              this.floatText(
+                this.player.x,
+                this.player.y - 40,
+                "PHOENIX!",
+                "#ff8800",
+                "20px",
+              );
+              this.cameras.main.flash(500, 0xff, 0x88, 0);
+              this.enemies.children.each((e) => {
+                if (
+                  e.active &&
+                  Phaser.Math.Distance.Between(
+                    this.player.x,
+                    this.player.y,
+                    e.x,
+                    e.y,
+                  ) < 120
+                )
+                  this.damageEnemy(e, 20);
+              });
+              return;
+            }
+            this.doGameOver();
+          }
+        }
+
+        doGameOver() {
+          this.gameOver = true;
+          this.player.setTint(0xff0000);
+          this.player.setVelocityY(-300);
+          this.player.body.setAllowGravity(false);
+          this.time.delayedCall(800, () => {
+            this.add
+              .rectangle(400, 300, 800, 600, 0x000000, 0.75)
+              .setScrollFactor(0)
+              .setDepth(90);
+            this.add
+              .text(400, 200, "GAME OVER", {
+                fontSize: "48px",
+                fill: "#ff2222",
+                fontFamily: "monospace",
+                fontStyle: "bold",
+                stroke: "#000",
+                strokeThickness: 8,
+              })
+              .setOrigin(0.5)
+              .setScrollFactor(0)
+              .setDepth(91);
+            this.add
+              .text(
+                400,
+                270,
+                "Floor:" + PD.floor + " Lv:" + PD.level + " Kills:" + PD.kills,
+                { fontSize: "16px", fill: "#ccc", fontFamily: "monospace" },
+              )
+              .setOrigin(0.5)
+              .setScrollFactor(0)
+              .setDepth(91);
+            let retry = this.add
+              .text(400, 350, "[ RETRY ]", {
+                fontSize: "28px",
+                fill: "#55ff55",
+                fontFamily: "monospace",
+              })
+              .setOrigin(0.5)
+              .setScrollFactor(0)
+              .setDepth(91)
+              .setInteractive({ useHandCursor: true });
+            retry.on("pointerdown", () => {
+              PD.reset();
+              this.scene.start("MenuScene");
+            });
+          });
+        }
+
+        collectCoin(p, coin) {
+          let stats = getStats();
+          let v =
+            (coin.goldValue || 1) +
+            Math.floor(((coin.goldValue || 1) * stats.goldBonus) / 100);
+          PD.gold += v;
+          PD.totalGold += v;
+          this.floatText(coin.x, coin.y, "+" + v + "g", "#ffdd00", "12px");
+          coin.destroy();
+        }
+        openChest(p, chest) {
+          if (chest.opened) return;
+          chest.opened = true;
+          chest.setTint(0x666666);
+          let stats = getStats();
+          let g = 8 + PD.floor * 3 + Math.floor(Math.random() * 12);
+          g += Math.floor((g * stats.goldBonus) / 100);
+          PD.gold += g;
+          PD.totalGold += g;
+          this.floatText(
+            chest.x,
+            chest.y - 10,
+            "+" + g + "g",
+            "#ffdd00",
+            "14px",
+          );
+          if (Math.random() < 0.45) this.dropItem(chest.x, chest.y - 20);
+          if (Math.random() < 0.3) this.dropConsumable(chest.x, chest.y);
+        }
+        collectItem(p, item) {
+          if (!item.itemData) return;
+          PD.inventory.push(item.itemData);
+          this.floatText(
+            item.x,
+            item.y - 10,
+            item.itemData.name,
+            RARITIES[item.itemData.rarity] || "#fff",
+            "12px",
+          );
+          item.destroy();
+        }
+
+        dropItem(x, y) {
+          let avail = ITEMS.filter((it) => it.minFloor <= PD.floor + 2);
+          if (!avail.length) return;
+          let w = avail.map((it) => (it.minFloor <= PD.floor ? 3 : 1)),
+            total = w.reduce((a, b) => a + b, 0),
+            r = Math.random() * total,
+            cum = 0,
+            chosen = avail[0];
+          for (let i = 0; i < avail.length; i++) {
+            cum += w[i];
+            if (r <= cum) {
+              chosen = avail[i];
+              break;
+            }
+          }
+          let drop = this.itemDrops.create(x, y, "itemdrop");
+          drop.setTint(parseInt(RARITIES[chosen.rarity].replace("#", "0x")));
+          drop.itemData = { ...chosen };
+          drop.setBounce(0.3);
+          drop.body.setSize(14, 14);
+        }
+        dropConsumable(x, y) {
+          let avail = CONSUMABLES.filter(
+            (c) => !c.minFloor || c.minFloor <= PD.floor,
+          );
+          if (!avail.length) return;
+          let ch = avail[Math.floor(Math.random() * avail.length)];
+          PD.consumables.push({ ...ch });
+          if (PD.consumables.length > 8) PD.consumables.length = 8;
+          this.floatText(x, y - 10, ch.name, "#88ffaa", "11px");
+        }
+
+        useConsumable(idx) {
+          if (idx >= PD.consumables.length || this.gameOver) return;
+          let con = PD.consumables[idx],
+            stats = getStats();
+          switch (con.effect) {
+            case "heal":
+              PD.hp = Math.min(stats.maxHp, PD.hp + con.value);
+              this.floatText(
+                this.player.x,
+                this.player.y - 30,
+                "+" + con.value + " HP",
+                "#44ff44",
+              );
+              break;
+            case "bomb":
+              this.cameras.main.shake(200, 0.03);
+              let ex = this.add
+                .sprite(this.player.x, this.player.y, "explosion")
+                .setDepth(20)
+                .setScale(2);
+              this.tweens.add({
+                targets: ex,
+                alpha: 0,
+                scale: 3,
+                duration: 400,
+                onComplete: () => ex.destroy(),
+              });
+              this.enemies.children.each((e) => {
+                if (
+                  e.active &&
+                  Phaser.Math.Distance.Between(
+                    this.player.x,
+                    this.player.y,
+                    e.x,
+                    e.y,
+                  ) < 120
+                )
+                  this.damageEnemy(e, con.value);
+              });
+              this.breakables.children.each((b) => {
+                if (
+                  b.active &&
+                  Phaser.Math.Distance.Between(
+                    this.player.x,
+                    this.player.y,
+                    b.x,
+                    b.y,
+                  ) < 100
+                ) {
+                  this.spawnBreakableReward(b.x, b.y);
+                  b.destroy();
+                }
+              });
+              break;
+            case "shield":
+              PD.shieldHits = con.value;
+              if (this.shieldSprite) this.shieldSprite.destroy();
+              this.shieldSprite = this.add
+                .image(this.player.x, this.player.y, "shield_fx")
+                .setAlpha(0.4)
+                .setDepth(11);
+              this.floatText(
+                this.player.x,
+                this.player.y - 30,
+                "Shield x" + con.value,
+                "#44aaff",
+              );
+              break;
+            case "tempAtk":
+              PD.tempBuffs.atk += con.value;
+              this.floatText(
+                this.player.x,
+                this.player.y - 30,
+                "+" + con.value + " ATK",
+                "#ff8844",
+              );
+              break;
+            case "tempSpd":
+              PD.tempBuffs.spd += con.value;
+              this.floatText(
+                this.player.x,
+                this.player.y - 30,
+                "+" + con.value + " SPD",
+                "#44ffaa",
+              );
+              break;
+          }
+          PD.consumables.splice(idx, 1);
+        }
+        spawnBreakableReward(x, y) {
+          let g = 3 + Math.floor(Math.random() * 5) + PD.floor;
+          PD.gold += g;
+          PD.totalGold += g;
+          this.floatText(x, y, "+" + g + "g", "#ffdd00", "12px");
+          if (Math.random() < 0.2) this.dropConsumable(x, y);
+        }
+
+        reachExit() {
+          if (this.gameOver) return;
+          if (this.isBossFloor) {
+            let alive = false;
+            this.enemies.children.each((e) => {
+              if (e.active && e.isBoss) alive = true;
+            });
+            if (alive) {
+              if (this._exitMsgCd <= 0) {
+                this.floatText(
+                  this.player.x,
+                  this.player.y - 30,
+                  "Defeat the boss!",
+                  "#ff4444",
+                );
+                this._exitMsgCd = 2;
+              }
+              return;
+            }
+          }
+          this.gameOver = true;
+          this.cameras.main.fade(500);
+          this.time.delayedCall(500, () => this.scene.start("ShopScene"));
+        }
+
+        doAttack() {
+          if (this.attackTimer > 0 || this.gameOver) return;
+          this.attackTimer = 0.35;
+          let stats = getStats(),
+            dir = this.facingRight ? 1 : -1;
+          let slash = this.physics.add.sprite(
+            this.player.x + dir * 28,
+            this.player.y,
+            "slash",
+          );
+          slash.body.setAllowGravity(false);
+          slash.setFlipX(!this.facingRight);
+          slash.setAlpha(0.8).setDepth(9).setScale(1.2);
+          let hitSet = new Set();
+          let oc = this.physics.add.overlap(slash, this.enemies, (s, enemy) => {
+            if (!enemy.active || hitSet.has(enemy)) return;
+            hitSet.add(enemy);
+            enemy.aggroed = true;
+            let dmg = Math.max(1, stats.attack - enemy.edefense);
+            let crit = Math.random() * 100 < stats.crit;
+            if (crit) dmg = Math.floor(dmg * 2.2);
+            let kbDir = this.player.x < enemy.x ? 1 : -1;
+            enemy.setVelocityX(kbDir * (180 + stats.attack * 3));
+            enemy.setVelocityY(-120);
+            this.damageEnemy(enemy, dmg, crit);
+            if (stats.lifesteal > 0 && enemy.active && enemy.ehp > 0) {
+              let heal = Math.max(1, Math.floor((dmg * stats.lifesteal) / 100));
+              PD.hp = Math.min(stats.maxHp, PD.hp + heal);
+              this.floatText(
+                this.player.x,
+                this.player.y - 35,
+                "+" + heal,
+                "#44ff44",
+                "10px",
+              );
+            }
+          });
+          let hitBr = new Set();
+          let oc2 = this.physics.add.overlap(
+            slash,
+            this.breakables,
+            (s, br) => {
+              if (!br.active || hitBr.has(br)) return;
+              hitBr.add(br);
+              br.hp = (br.hp || 3) - 1;
+              br.setAlpha(0.3 + 0.7 * (br.hp / 3));
+              if (br.hp <= 0) {
+                this.spawnBreakableReward(br.x, br.y);
+                br.destroy();
+              }
+            },
+          );
+          this.tweens.add({
+            targets: slash,
+            alpha: 0,
+            duration: 180,
+            onComplete: () => {
+              this.physics.world.removeCollider(oc);
+              this.physics.world.removeCollider(oc2);
+              if (slash && slash.active) slash.destroy();
+            },
+          });
+        }
+
+        doDash() {
+          if (this.dashCooldown > 0 || this.dashTimer > 0 || this.gameOver)
+            return;
+          let stats = getStats();
+          this.dashTimer = DASH_DUR;
+          this.dashCooldown = DASH_CD - stats.dashCdReduce;
+          let dir = this.facingRight ? 1 : -1;
+          this.player.setVelocityX(dir * DASH_SPD);
+          this.player.setVelocityY(0);
+          this.player.body.setAllowGravity(false);
+          this.invTimer = Math.max(this.invTimer, DASH_DUR + 0.05);
+          this.player.setAlpha(0.5);
+          for (let i = 0; i < 3; i++) {
+            let gh = this.add
+              .image(this.player.x - dir * i * 12, this.player.y, "player")
+              .setAlpha(0.3)
+              .setDepth(8)
+              .setFlipX(!this.facingRight);
+            this.tweens.add({
+              targets: gh,
+              alpha: 0,
+              duration: 300,
+              onComplete: () => gh.destroy(),
+            });
+          }
+        }
+
+        damageEnemy(enemy, dmg, crit = false) {
+          enemy.ehp -= dmg;
+          enemy.hitFlash = 0.15;
+          enemy.setTint(0xffffff);
+          this.floatText(
+            enemy.x,
+            enemy.y - 15,
+            (crit ? "CRIT! " : "") + dmg,
+            crit ? "#ffaa00" : "#fff",
+          );
+          if (enemy.ehp <= 0) this.killEnemy(enemy);
+        }
+
+        killEnemy(enemy) {
+          let stats = getStats();
+          let goldAmt =
+            enemy.egold + Math.floor((enemy.egold * stats.goldBonus) / 100);
+          this.floatText(
+            enemy.x,
+            enemy.y - 10,
+            "+" + goldAmt + "g",
+            "#ffdd00",
+            "12px",
+          );
+          PD.gold += goldAmt;
+          PD.totalGold += goldAmt;
+          PD.kills++;
+          let leveled = addXP(enemy.exp);
+          this.floatText(
+            enemy.x,
+            enemy.y - 28,
+            "+" + enemy.exp + "xp",
+            "#44aaff",
+            "11px",
+          );
+          if (leveled) {
+            this.floatText(
+              this.player.x,
+              this.player.y - 45,
+              "LEVEL UP!",
+              "#ffff00",
+              "20px",
+            );
+            this.cameras.main.flash(400, 0xff, 0xff, 0x44);
+          }
+          if (Math.random() < (enemy.isBoss ? 0.8 : 0.15))
+            this.dropItem(enemy.x, enemy.y - 10);
+          if (enemy.isBoss || Math.random() < 0.2)
+            this.dropConsumable(enemy.x + 10, enemy.y - 10);
+          for (let i = 0; i < 8; i++) {
+            let angle = Math.random() * Math.PI * 2,
+              dist = 5 + Math.random() * 15;
+            let px = enemy.x + Math.cos(angle) * dist,
+              py = enemy.y + Math.sin(angle) * dist;
+            let color = ENEMY_DEFS[enemy.etype]
+              ? ENEMY_DEFS[enemy.etype].color
+              : BOSS_DEFS[enemy.etype]
+                ? BOSS_DEFS[enemy.etype].color
+                : 0xffffff;
+            let p = this.add
+              .circle(px, py, 2 + Math.random() * 3, color)
+              .setDepth(15);
+            this.tweens.add({
+              targets: p,
+              alpha: 0,
+              x: px + Math.cos(angle) * 25,
+              y: py - 15,
+              duration: 400,
+              onComplete: () => p.destroy(),
+            });
+          }
+          if (enemy.hpBarBg) {
+            enemy.hpBarBg.destroy();
+            enemy.hpBarBg = null;
+          }
+          if (enemy.hpBarFill) {
+            enemy.hpBarFill.destroy();
+            enemy.hpBarFill = null;
+          }
+          if (enemy.nameTag) {
+            enemy.nameTag.destroy();
+            enemy.nameTag = null;
+          }
+          this.enemies.children.each((e) => {
+            if (
+              e.active &&
+              Phaser.Math.Distance.Between(enemy.x, enemy.y, e.x, e.y) < 200
+            )
+              e.aggroed = true;
+          });
+          enemy.destroy();
+        }
+
+        updateEnemyAI(e, dt) {
+          if (!e.active) return;
+          if (e.hitFlash > 0) {
+            e.hitFlash -= dt;
+            if (e.hitFlash <= 0) e.clearTint();
+          }
+          if (e.attackCd > 0) e.attackCd -= dt;
+          let dx = this.player.x - e.x,
+            dy = this.player.y - e.y,
+            dist = Math.sqrt(dx * dx + dy * dy);
+          let type = e.etype;
+
+          if (!e.aggroed && dist < e.aggroRange) {
+            e.aggroed = true;
+            this.enemies.children.each((o) => {
+              if (
+                o.active &&
+                o !== e &&
+                Phaser.Math.Distance.Between(e.x, e.y, o.x, o.y) < 150
+              )
+                o.aggroed = true;
+            });
+          }
+
+          if (type === "bat" || type === "ghost") {
+            e.wavt = (e.wavt || 0) + dt * 3;
+            if (e.aggroed) {
+              e.setVelocityX(Math.sign(dx) * e.espeed * 1.3);
+              e.setVelocityY((this.player.y - e.y) * 2);
+            } else {
+              let targetY = (e.baseY || e.y) + Math.sin(e.wavt) * 35;
+              e.dir = e.dir || 1;
+              e.moveTimer += dt;
+              if (e.moveTimer > 2) {
+                e.moveTimer = 0;
+                e.dir *= -1;
+              }
+              e.setVelocityX(e.dir * e.espeed * 0.3);
+              e.setVelocityY((targetY - e.y) * 2);
+            }
+            if (type === "ghost") e.setAlpha(0.5 + Math.sin(e.wavt) * 0.3);
+          } else if (e.aggroed) {
+            let chaseSpd = e.espeed * (type === "golem" ? 0.8 : 1.2);
+            if (dist < 300) {
+              e.setVelocityX(Math.sign(dx) * chaseSpd);
+              if (dy < -40 && e.body.blocked.down && Math.abs(dx) < 150)
+                e.setVelocityY(-300);
+            } else {
+              e.setVelocityX(Math.sign(dx) * e.espeed * 0.5);
+            }
+            if (BOSS_DEFS[type] && e.attackCd <= 0 && dist < 300) {
+              e.attackCd = 1.5;
+              let proj = this.projectiles.create(e.x, e.y - 5, "coin");
+              proj.setTint(0xff2222);
+              proj.body.setAllowGravity(false);
+              proj.damage = Math.floor(e.eattack * 0.6);
+              let angle = Math.atan2(dy, dx);
+              proj.setVelocity(Math.cos(angle) * 200, Math.sin(angle) * 200);
+              this.time.delayedCall(3000, () => {
+                if (proj && proj.active) proj.destroy();
+              });
+            }
+            if (type === "golem" && e.attackCd <= 0 && dist < 60) {
+              e.attackCd = 2;
+              this.cameras.main.shake(100, 0.01);
+              if (
+                Math.abs(dx) < 80 &&
+                Math.abs(dy) < 60 &&
+                this.invTimer <= 0 &&
+                !this.gameOver
+              )
+                this.takeDamage(Math.max(1, e.eattack - getStats().defense));
+            }
+          } else {
+            e.moveTimer += dt;
+            if (e.moveTimer > 2) {
+              e.moveTimer = 0;
+              e.dir = (e.dir || 1) * -1;
+            }
+            e.setVelocityX(e.dir * e.espeed * 0.3);
+            if (e.body.blocked.left) e.dir = 1;
+            if (e.body.blocked.right) e.dir = -1;
+          }
+          e.setFlipX(e.body.velocity.x < 0);
+
+          if (!e.hpBarBg) {
+            let bw = e.isBoss ? 60 : 26;
+            e.hpBarBg = this.add
+              .rectangle(e.x, e.y - 20, bw, e.isBoss ? 5 : 3, 0x000000, 0.6)
+              .setDepth(15);
+            e.hpBarFill = this.add
+              .rectangle(e.x, e.y - 20, bw - 2, e.isBoss ? 4 : 2, 0xff3333)
+              .setDepth(16)
+              .setOrigin(0, 0.5);
+            if (e.isBoss)
+              e.nameTag = this.add
+                .text(e.x, e.y - 30, e.bossName, {
+                  fontSize: "10px",
+                  fill: "#ff6644",
+                  fontFamily: "monospace",
+                  stroke: "#000",
+                  strokeThickness: 2,
+                })
+                .setOrigin(0.5)
+                .setDepth(17);
+          }
+          let bw = e.isBoss ? 58 : 24,
+            bo = e.isBoss ? 28 : 18;
+          e.hpBarBg.setPosition(e.x, e.y - bo);
+          let ratio = Math.max(0, e.ehp / e.emaxhp);
+          e.hpBarFill.setPosition(e.x - bw / 2, e.y - bo);
+          e.hpBarFill.width = bw * ratio;
+          e.hpBarFill.fillColor =
+            ratio > 0.5 ? 0x44cc44 : ratio > 0.25 ? 0xcccc44 : 0xcc4444;
+          if (e.nameTag) e.nameTag.setPosition(e.x, e.y - bo - 12);
+        }
+
+        update(time, delta) {
+          if (this.gameOver) return;
+          let dt = delta / 1000,
+            stats = getStats();
+          if (this._exitMsgCd > 0) this._exitMsgCd -= dt;
+          if (this.attackTimer > 0) this.attackTimer -= dt;
+          if (this.dashCooldown > 0) this.dashCooldown -= dt;
+          if (this.dashTimer > 0) {
+            this.dashTimer -= dt;
+            if (this.dashTimer <= 0) {
+              this.player.body.setAllowGravity(true);
+              this.player.setAlpha(1);
+            }
+          }
+          if (this.invTimer > 0) {
+            this.invTimer -= dt;
+            if (this.dashTimer <= 0)
+              this.player.setAlpha(Math.sin(time * 0.02) > 0 ? 1 : 0.3);
+            if (this.invTimer <= 0) {
+              this.player.setAlpha(1);
+              this.player.clearTint();
+            }
+          }
+          this.regenTimer += dt;
+          if (this.regenTimer >= 1 && stats.regen > 0) {
+            this.regenTimer = 0;
+            PD.hp = Math.min(stats.maxHp, PD.hp + stats.regen);
+          }
+          if (stats.fireAura > 0) {
+            this.auraTimer += dt;
+            if (this.auraTimer >= 1.5) {
+              this.auraTimer = 0;
+              this.enemies.children.each((e) => {
+                if (
+                  e.active &&
+                  Phaser.Math.Distance.Between(
+                    this.player.x,
+                    this.player.y,
+                    e.x,
+                    e.y,
+                  ) < 90
+                ) {
+                  this.damageEnemy(e, stats.fireAura);
+                  let fx = this.add
+                    .circle(e.x, e.y, 8, 0xff4400, 0.5)
+                    .setDepth(12);
+                  this.tweens.add({
+                    targets: fx,
+                    alpha: 0,
+                    scale: 2,
+                    duration: 300,
+                    onComplete: () => fx.destroy(),
+                  });
+                }
+              });
+            }
+          }
+
+          let onFloor = this.player.body.blocked.down;
+          let onLadder = false;
+          this.ladders.children.each((l) => {
+            if (
+              l.active &&
+              Phaser.Geom.Intersects.RectangleToRectangle(
+                this.player.getBounds(),
+                l.getBounds(),
+              )
+            )
+              onLadder = true;
+          });
+
+          if (this.dashTimer <= 0) {
+            let mx = 0;
+            if (this.cursors.left.isDown || this.keys.a.isDown) {
+              mx = -1;
+              this.facingRight = false;
+              this.player.setFlipX(true);
+            } else if (this.cursors.right.isDown || this.keys.d.isDown) {
+              mx = 1;
+              this.facingRight = true;
+              this.player.setFlipX(false);
+            }
+            this.player.setVelocityX(mx * stats.speed);
+
+            if (
+              onLadder &&
+              (this.cursors.up.isDown ||
+                this.keys.w.isDown ||
+                this.cursors.down.isDown ||
+                this.keys.s.isDown)
+            ) {
+              this.player.body.setAllowGravity(false);
+              if (this.cursors.up.isDown || this.keys.w.isDown)
+                this.player.setVelocityY(-120);
+              else if (this.cursors.down.isDown || this.keys.s.isDown)
+                this.player.setVelocityY(120);
+              else this.player.setVelocityY(0);
+            } else {
+              this.player.body.setAllowGravity(true);
+            }
+
+            if (onFloor) this.extraJumps = stats.doubleJump ? 1 : 0;
+            let jumpJust =
+              Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
+              Phaser.Input.Keyboard.JustDown(this.keys.w);
+            if (jumpJust && !onLadder) {
+              if (onFloor) this.player.setVelocityY(JUMP_VEL);
+              else if (this.extraJumps > 0) {
+                this.player.setVelocityY(JUMP_VEL * 0.85);
+                this.extraJumps--;
+                for (let i = 0; i < 4; i++) {
+                  let p = this.add
+                    .circle(
+                      this.player.x + Phaser.Math.Between(-8, 8),
+                      this.player.y + 14,
+                      2,
+                      0xaaaaff,
+                      0.6,
+                    )
+                    .setDepth(8);
+                  this.tweens.add({
+                    targets: p,
+                    alpha: 0,
+                    y: p.y + 15,
+                    duration: 300,
+                    onComplete: () => p.destroy(),
+                  });
+                }
+              }
+            }
+            if (mx !== 0 && onFloor) {
+              this.walkTimer += dt;
+              if (this.walkTimer > 0.15) {
+                this.walkTimer = 0;
+                this.walkFrame = 1 - this.walkFrame;
+              }
+              this.player.setTexture(
+                this.walkFrame ? "player_walk1" : "player",
+              );
+            } else if (!onFloor) this.player.setTexture("player_jump");
+            else {
+              this.player.setTexture("player");
+              this.walkTimer = 0;
+              this.walkFrame = 0;
+            }
+          }
+
+          if (
+            Phaser.Input.Keyboard.JustDown(this.keys.z) ||
+            Phaser.Input.Keyboard.JustDown(this.keys.j)
+          )
+            this.doAttack();
+          if (
+            Phaser.Input.Keyboard.JustDown(this.keys.x) ||
+            Phaser.Input.Keyboard.JustDown(this.keys.k)
+          )
+            this.doDash();
+          if (Phaser.Input.Keyboard.JustDown(this.keys.one))
+            this.useConsumable(0);
+          if (Phaser.Input.Keyboard.JustDown(this.keys.two))
+            this.useConsumable(1);
+          if (Phaser.Input.Keyboard.JustDown(this.keys.three))
+            this.useConsumable(2);
+          if (Phaser.Input.Keyboard.JustDown(this.keys.four))
+            this.useConsumable(3);
+
+          if (this.shieldSprite && PD.shieldHits > 0)
+            this.shieldSprite.setPosition(this.player.x, this.player.y);
+          this.enemies.children.each((e) => this.updateEnemyAI(e, dt));
+
+          let hpRatio = Math.max(0, PD.hp / getStats().maxHp);
+          this.hpBarFill.width = 200 * hpRatio;
+          this.hpBarFill.fillColor =
+            hpRatio > 0.5 ? 0x44cc44 : hpRatio > 0.25 ? 0xcccc44 : 0xcc4444;
+          this.hpText.setText(PD.hp + "/" + stats.maxHp);
+          this.xpBarFill.width =
+            200 * (PD.xpToNext > 0 ? PD.xp / PD.xpToNext : 0);
+          this.infoText.setText(
+            "Lv." +
+              PD.level +
+              " Gold:" +
+              PD.gold +
+              " Floor:" +
+              PD.floor +
+              "\nATK:" +
+              stats.attack +
+              " DEF:" +
+              stats.defense +
+              " SPD:" +
+              Math.floor(stats.speed) +
+              " CRIT:" +
+              stats.crit +
+              "%" +
+              (stats.lifesteal > 0 ? " LS:" + stats.lifesteal + "%" : "") +
+              (PD.shieldHits > 0 ? " Sh:" + PD.shieldHits : ""),
+          );
+          let eqL = [];
+          let si = {
+            head: "\u{1FA96}",
+            body: "\u{1F6E1}",
+            feet: "\u{1F462}",
+            weapon: "\u2694",
+          };
+          for (let sl in PD.equipment) {
+            let it = PD.equipment[sl];
+            eqL.push((si[sl] || sl) + ":" + (it ? it.name : "--"));
+          }
+          this.equipText.setText(eqL.join(" | "));
+          this.bonusText.setText(getSetBonusLabels().join(" | "));
+          let conL = [];
+          for (let i = 0; i < Math.min(4, PD.consumables.length); i++)
+            conL.push("[" + (i + 1) + "]" + PD.consumables[i].name);
+          this.consumableText.setText(conL.join(" "));
+        }
+      }
+
+      class ShopScene extends Phaser.Scene {
+        constructor() {
+          super("ShopScene");
+        }
+        create() {
+          PD.floor++;
+          PD.phoenixUsed = false;
+          PD.tempBuffs = { atk: 0, spd: 0 };
+          let stats = getStats();
+          PD.hp = Math.min(stats.maxHp, PD.hp + Math.floor(stats.maxHp * 0.3));
+          this.cameras.main.setBackgroundColor("#0a0a15");
+          this.add.image(400, 300, "parallax_stars").setAlpha(0.3);
+          let biome = getBiome(PD.floor);
+          this.add
+            .text(400, 22, biome.name + " - Floor " + PD.floor, {
+              fontSize: "24px",
+              fill: "#ffdd44",
+              fontFamily: "monospace",
+              fontStyle: "bold",
+              stroke: "#000",
+              strokeThickness: 4,
+            })
+            .setOrigin(0.5);
+          for (let i = PD.inventory.length - 1; i >= 0; i--) {
+            let it = PD.inventory[i];
+            if (!PD.equipment[it.slot]) {
+              PD.equipment[it.slot] = it;
+              PD.inventory.splice(i, 1);
+            }
+          }
+          this.refreshUI();
+        }
+        refreshUI() {
+          if (this.uiC) this.uiC.destroy();
+          this.uiC = this.add.container(0, 0);
+          let stats = getStats();
+          this.uiC.add(
+            this.add.text(
+              20,
+              48,
+              "HP:" +
+                PD.hp +
+                "/" +
+                stats.maxHp +
+                " ATK:" +
+                stats.attack +
+                " DEF:" +
+                stats.defense +
+                " SPD:" +
+                Math.floor(stats.speed) +
+                " CRIT:" +
+                stats.crit +
+                "%",
+              { fontSize: "11px", fill: "#aaccff", fontFamily: "monospace" },
+            ),
+          );
+          this.uiC.add(
+            this.add.text(
+              20,
+              62,
+              "Gold:" +
+                PD.gold +
+                " Lv:" +
+                PD.level +
+                " XP:" +
+                PD.xp +
+                "/" +
+                PD.xpToNext +
+                " TP:" +
+                PD.talentPoints,
+              { fontSize: "11px", fill: "#ffdd44", fontFamily: "monospace" },
+            ),
+          );
+          let ey = 82;
+          this.uiC.add(
+            this.add.text(20, ey, "EQUIPPED", {
+              fontSize: "12px",
+              fill: "#88aaff",
+              fontFamily: "monospace",
+              fontStyle: "bold",
+            }),
+          );
+          ey += 14;
+          for (let sl of ["head", "body", "feet", "weapon"]) {
+            let it = PD.equipment[sl];
+            let color = it ? RARITIES[it.rarity] || "#aaa" : "#555";
+            this.uiC.add(
+              this.add.text(28, ey, sl + ": " + (it ? it.name : "(empty)"), {
+                fontSize: "10px",
+                fill: color,
+                fontFamily: "monospace",
+              }),
+            );
+            if (it) {
+              let ss = Object.entries(it.stats)
+                .map(([k, v]) => k + "+" + v)
+                .join(" ");
+              this.uiC.add(
+                this.add.text(210, ey, ss, {
+                  fontSize: "9px",
+                  fill: "#777",
+                  fontFamily: "monospace",
+                }),
+              );
+              let ub = this.add
+                .text(370, ey, "[off]", {
+                  fontSize: "10px",
+                  fill: "#f88",
+                  fontFamily: "monospace",
+                })
+                .setInteractive({ useHandCursor: true });
+              ub.on("pointerdown", () => {
+                PD.inventory.push(PD.equipment[sl]);
+                PD.equipment[sl] = null;
+                this.refreshUI();
+              });
+              this.uiC.add(ub);
+            }
+            ey += 13;
+          }
+          let bonuses = getSetBonusLabels();
+          if (bonuses.length > 0) {
+            ey += 2;
+            bonuses.forEach((b) => {
+              this.uiC.add(
+                this.add.text(28, ey, "* " + b, {
+                  fontSize: "9px",
+                  fill: "#da3",
+                  fontFamily: "monospace",
+                }),
+              );
+              ey += 11;
+            });
+          }
+          let iy = 82;
+          this.uiC.add(
+            this.add.text(440, iy, "INVENTORY", {
+              fontSize: "12px",
+              fill: "#8fa",
+              fontFamily: "monospace",
+              fontStyle: "bold",
+            }),
+          );
+          iy += 14;
+          if (!PD.inventory.length)
+            this.uiC.add(
+              this.add.text(450, iy, "(empty)", {
+                fontSize: "10px",
+                fill: "#555",
+                fontFamily: "monospace",
+              }),
+            );
+          else
+            PD.inventory.forEach((it, idx) => {
+              if (iy > 220) return;
+              let color = RARITIES[it.rarity] || "#aaa";
+              this.uiC.add(
+                this.add.text(450, iy, it.name, {
+                  fontSize: "10px",
+                  fill: color,
+                  fontFamily: "monospace",
+                }),
+              );
+              let eq = this.add
+                .text(590, iy, "[eq]", {
+                  fontSize: "10px",
+                  fill: "#5f5",
+                  fontFamily: "monospace",
+                })
+                .setInteractive({ useHandCursor: true });
+              eq.on("pointerdown", () => {
+                let old = PD.equipment[it.slot];
+                PD.equipment[it.slot] = it;
+                PD.inventory.splice(idx, 1);
+                if (old) PD.inventory.push(old);
+                this.refreshUI();
+              });
+              this.uiC.add(eq);
+              let sell = this.add
+                .text(630, iy, "[sell:" + Math.floor(it.cost * 0.4) + "g]", {
+                  fontSize: "9px",
+                  fill: "#fa4",
+                  fontFamily: "monospace",
+                })
+                .setInteractive({ useHandCursor: true });
+              sell.on("pointerdown", () => {
+                PD.gold += Math.floor(it.cost * 0.4);
+                PD.inventory.splice(idx, 1);
+                this.refreshUI();
+              });
+              this.uiC.add(sell);
+              iy += 13;
+            });
+          let sy = 240;
+          this.uiC.add(
+            this.add.rectangle(400, sy - 3, 760, 1, 0x334455).setOrigin(0.5),
+          );
+          this.uiC.add(
+            this.add.text(20, sy, "SHOP", {
+              fontSize: "13px",
+              fill: "#fa4",
+              fontFamily: "monospace",
+              fontStyle: "bold",
+            }),
+          );
+          sy += 16;
+          Phaser.Utils.Array.Shuffle([
+            ...ITEMS.filter((it) => it.minFloor <= PD.floor + 3),
+          ])
+            .slice(0, 5)
+            .forEach((it) => {
+              let color = RARITIES[it.rarity] || "#aaa";
+              let ss = Object.entries(it.stats)
+                .map(([k, v]) => k + "+" + v)
+                .join(" ");
+              this.uiC.add(
+                this.add.text(28, sy, it.name, {
+                  fontSize: "10px",
+                  fill: color,
+                  fontFamily: "monospace",
+                }),
+              );
+              this.uiC.add(
+                this.add.text(185, sy, ss, {
+                  fontSize: "9px",
+                  fill: "#777",
+                  fontFamily: "monospace",
+                }),
+              );
+              this.uiC.add(
+                this.add.text(360, sy, "[" + it.set + "]", {
+                  fontSize: "9px",
+                  fill: "#556",
+                  fontFamily: "monospace",
+                }),
+              );
+              let cc = PD.gold >= it.cost ? "#5f5" : "#f55";
+              let bb = this.add
+                .text(430, sy, "Buy:" + it.cost + "g", {
+                  fontSize: "10px",
+                  fill: cc,
+                  fontFamily: "monospace",
+                })
+                .setInteractive({ useHandCursor: true });
+              bb.on("pointerdown", () => {
+                if (PD.gold >= it.cost) {
+                  PD.gold -= it.cost;
+                  PD.inventory.push({ ...it });
+                  this.refreshUI();
+                }
+              });
+              this.uiC.add(bb);
+              sy += 14;
+            });
+          sy += 4;
+          this.uiC.add(
+            this.add.text(20, sy, "CONSUMABLES", {
+              fontSize: "12px",
+              fill: "#8fa",
+              fontFamily: "monospace",
+              fontStyle: "bold",
+            }),
+          );
+          sy += 14;
+          Phaser.Utils.Array.Shuffle([
+            ...CONSUMABLES.filter((c) => !c.minFloor || c.minFloor <= PD.floor),
+          ])
+            .slice(0, 4)
+            .forEach((con) => {
+              this.uiC.add(
+                this.add.text(28, sy, con.name + " - " + con.desc, {
+                  fontSize: "9px",
+                  fill: "#ada",
+                  fontFamily: "monospace",
+                }),
+              );
+              let cc = PD.gold >= con.cost ? "#5f5" : "#f55";
+              let bb = this.add
+                .text(430, sy, "Buy:" + con.cost + "g", {
+                  fontSize: "10px",
+                  fill: cc,
+                  fontFamily: "monospace",
+                })
+                .setInteractive({ useHandCursor: true });
+              bb.on("pointerdown", () => {
+                if (PD.gold >= con.cost && PD.consumables.length < 8) {
+                  PD.gold -= con.cost;
+                  PD.consumables.push({ ...con });
+                  this.refreshUI();
+                }
+              });
+              this.uiC.add(bb);
+              sy += 13;
+            });
+          let healCost = 15 + PD.floor * 5;
+          if (PD.hp < stats.maxHp) {
+            sy += 3;
+            let hc = PD.gold >= healCost ? "#5f5" : "#f55";
+            let hb = this.add
+              .text(28, sy, "Full Heal: " + healCost + "g", {
+                fontSize: "11px",
+                fill: hc,
+                fontFamily: "monospace",
+              })
+              .setInteractive({ useHandCursor: true });
+            hb.on("pointerdown", () => {
+              if (PD.gold >= healCost) {
+                PD.gold -= healCost;
+                PD.hp = stats.maxHp;
+                this.refreshUI();
+              }
+            });
+            this.uiC.add(hb);
+            sy += 15;
+          }
+          sy += 4;
+          this.uiC.add(
+            this.add.rectangle(400, sy, 760, 1, 0x334455).setOrigin(0.5),
+          );
+          sy += 6;
+          this.uiC.add(
+            this.add.text(20, sy, "TALENTS (" + PD.talentPoints + ")", {
+              fontSize: "12px",
+              fill: "#db4",
+              fontFamily: "monospace",
+              fontStyle: "bold",
+            }),
+          );
+          sy += 14;
+          TALENTS.forEach((tal) => {
+            let rank = getTalentRank(tal.id);
+            let color =
+              rank >= tal.maxRank
+                ? "#888"
+                : PD.talentPoints > 0
+                  ? "#fd4"
+                  : "#666";
+            this.uiC.add(
+              this.add.text(
+                28,
+                sy,
+                tal.name + " [" + rank + "/" + tal.maxRank + "] " + tal.desc,
+                { fontSize: "9px", fill: color, fontFamily: "monospace" },
+              ),
+            );
+            if (rank < tal.maxRank && PD.talentPoints > 0) {
+              let ub = this.add
+                .text(430, sy, "[+]", {
+                  fontSize: "10px",
+                  fill: "#5f5",
+                  fontFamily: "monospace",
+                })
+                .setInteractive({ useHandCursor: true });
+              ub.on("pointerdown", () => {
+                PD.talents[tal.id] = (PD.talents[tal.id] || 0) + 1;
+                PD.talentPoints--;
+                PD.maxHp = getStats().maxHp;
+                this.refreshUI();
+              });
+              this.uiC.add(ub);
+            }
+            sy += 12;
+          });
+          let cont = this.add
+            .text(400, 568, "[ CONTINUE TO FLOOR " + PD.floor + " ]", {
+              fontSize: "20px",
+              fill: "#4f4",
+              fontFamily: "monospace",
+              fontStyle: "bold",
+              stroke: "#000",
+              strokeThickness: 3,
+            })
+            .setOrigin(0.5)
+            .setInteractive({ useHandCursor: true });
+          cont.on("pointerover", () => cont.setFill("#8f8"));
+          cont.on("pointerout", () => cont.setFill("#4f4"));
+          cont.on("pointerdown", () => this.scene.start("GameScene"));
+          this.uiC.add(cont);
+        }
+      }
+
+      new Phaser.Game({
+        type: Phaser.AUTO,
+        width: 800,
+        height: 600,
+        backgroundColor: "#1a1a2e",
+        physics: {
+          default: "arcade",
+          arcade: { gravity: { y: GRAVITY }, debug: false, tileBias: 32 },
+        },
+        scene: [BootScene, MenuScene, GameScene, ShopScene],
+        scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+        pixelArt: true,
+        roundPixels: true,
+      });
+    </script>
+  </body>
+</html>
