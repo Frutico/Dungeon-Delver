@@ -38,7 +38,14 @@
         DASH_SPD = 400,
         DASH_DUR = 0.18,
         DASH_CD = 0.8;
-      const SAVE_KEY = "dungeon_delver_save_v2";
+      const SAVE_KEY = "dungeon_delver_save_v3";
+
+      // Coyote time & jump buffer (in seconds)
+      const COYOTE_TIME = 0.12;
+      const JUMP_BUFFER = 0.1;
+      // Corner correction: nudge pixels when head hits corner
+      const CORNER_CORRECT = 6;
+
       const RARITIES = {
         common: "#aaaaaa",
         uncommon: "#55ff55",
@@ -90,7 +97,9 @@
         if (f <= 19) return BIOMES.ice;
         return BIOMES.void;
       }
+
       const ITEMS = [
+        // === LEATHER SET (common) ===
         {
           id: "leather_cap",
           name: "Leather Cap",
@@ -121,16 +130,7 @@
           minFloor: 1,
           cost: 35,
         },
-        {
-          id: "wooden_sword",
-          name: "Wooden Sword",
-          slot: "weapon",
-          set: "leather",
-          rarity: "common",
-          stats: { attack: 3 },
-          minFloor: 1,
-          cost: 40,
-        },
+        // === IRON SET (uncommon) ===
         {
           id: "iron_helm",
           name: "Iron Helm",
@@ -161,16 +161,7 @@
           minFloor: 3,
           cost: 90,
         },
-        {
-          id: "steel_sword",
-          name: "Steel Sword",
-          slot: "weapon",
-          set: "iron",
-          rarity: "uncommon",
-          stats: { attack: 6 },
-          minFloor: 3,
-          cost: 100,
-        },
+        // === SHADOW SET (rare) ===
         {
           id: "shadow_hood",
           name: "Shadow Hood",
@@ -201,16 +192,7 @@
           minFloor: 6,
           cost: 190,
         },
-        {
-          id: "shadow_blade",
-          name: "Shadow Blade",
-          slot: "weapon",
-          set: "shadow",
-          rarity: "rare",
-          stats: { attack: 8, crit: 10 },
-          minFloor: 6,
-          cost: 200,
-        },
+        // === FIRE SET (epic) ===
         {
           id: "fire_crown",
           name: "Fire Crown",
@@ -241,16 +223,7 @@
           minFloor: 10,
           cost: 360,
         },
-        {
-          id: "inferno_blade",
-          name: "Inferno Blade",
-          slot: "weapon",
-          set: "fire",
-          rarity: "epic",
-          stats: { attack: 14 },
-          minFloor: 10,
-          cost: 380,
-        },
+        // === VOID SET (legendary) ===
         {
           id: "void_mask",
           name: "Void Mask",
@@ -281,15 +254,284 @@
           minFloor: 16,
           cost: 620,
         },
+        // === WEAPONS - each has unique knockback, speed, range ===
+        // Daggers: fast, low knockback, low range
+        {
+          id: "rusty_dagger",
+          name: "Rusty Dagger",
+          slot: "weapon",
+          set: "leather",
+          rarity: "common",
+          stats: { attack: 2 },
+          minFloor: 1,
+          cost: 25,
+          weapon: {
+            knockback: 80,
+            atkSpeed: 0.18,
+            range: 22,
+            size: { w: 24, h: 8 },
+          },
+        },
+        {
+          id: "shadow_dagger",
+          name: "Shadow Dagger",
+          slot: "weapon",
+          set: "shadow",
+          rarity: "rare",
+          stats: { attack: 6, crit: 15 },
+          minFloor: 6,
+          cost: 190,
+          weapon: {
+            knockback: 90,
+            atkSpeed: 0.15,
+            range: 24,
+            size: { w: 26, h: 8 },
+          },
+        },
+        {
+          id: "void_fang",
+          name: "Void Fang",
+          slot: "weapon",
+          set: "void",
+          rarity: "legendary",
+          stats: { attack: 14, crit: 12 },
+          minFloor: 16,
+          cost: 650,
+          weapon: {
+            knockback: 100,
+            atkSpeed: 0.13,
+            range: 26,
+            size: { w: 28, h: 8 },
+          },
+        },
+        // Swords: balanced
+        {
+          id: "wooden_sword",
+          name: "Wooden Sword",
+          slot: "weapon",
+          set: "leather",
+          rarity: "common",
+          stats: { attack: 3 },
+          minFloor: 1,
+          cost: 40,
+          weapon: {
+            knockback: 150,
+            atkSpeed: 0.3,
+            range: 30,
+            size: { w: 32, h: 10 },
+          },
+        },
+        {
+          id: "steel_sword",
+          name: "Steel Sword",
+          slot: "weapon",
+          set: "iron",
+          rarity: "uncommon",
+          stats: { attack: 6 },
+          minFloor: 3,
+          cost: 100,
+          weapon: {
+            knockback: 180,
+            atkSpeed: 0.28,
+            range: 32,
+            size: { w: 34, h: 10 },
+          },
+        },
+        {
+          id: "flame_sword",
+          name: "Flame Sword",
+          slot: "weapon",
+          set: "fire",
+          rarity: "epic",
+          stats: { attack: 12 },
+          minFloor: 10,
+          cost: 380,
+          weapon: {
+            knockback: 200,
+            atkSpeed: 0.28,
+            range: 34,
+            size: { w: 36, h: 12 },
+          },
+        },
         {
           id: "void_reaper",
           name: "Void Reaper",
           slot: "weapon",
           set: "void",
           rarity: "legendary",
-          stats: { attack: 20, crit: 10 },
+          stats: { attack: 18, crit: 8 },
           minFloor: 16,
           cost: 680,
+          weapon: {
+            knockback: 220,
+            atkSpeed: 0.25,
+            range: 36,
+            size: { w: 38, h: 12 },
+          },
+        },
+        // Hammers: slow, huge knockback, short range
+        {
+          id: "wooden_mallet",
+          name: "Wooden Mallet",
+          slot: "weapon",
+          set: "leather",
+          rarity: "common",
+          stats: { attack: 5 },
+          minFloor: 1,
+          cost: 45,
+          weapon: {
+            knockback: 300,
+            atkSpeed: 0.5,
+            range: 24,
+            size: { w: 28, h: 16 },
+          },
+        },
+        {
+          id: "iron_hammer",
+          name: "Iron Hammer",
+          slot: "weapon",
+          set: "iron",
+          rarity: "uncommon",
+          stats: { attack: 9 },
+          minFloor: 3,
+          cost: 110,
+          weapon: {
+            knockback: 350,
+            atkSpeed: 0.48,
+            range: 26,
+            size: { w: 30, h: 16 },
+          },
+        },
+        {
+          id: "fire_maul",
+          name: "Fire Maul",
+          slot: "weapon",
+          set: "fire",
+          rarity: "epic",
+          stats: { attack: 16 },
+          minFloor: 10,
+          cost: 400,
+          weapon: {
+            knockback: 400,
+            atkSpeed: 0.45,
+            range: 28,
+            size: { w: 32, h: 18 },
+          },
+        },
+        // Spears: medium speed, long range, low knockback
+        {
+          id: "wooden_spear",
+          name: "Wooden Spear",
+          slot: "weapon",
+          set: "leather",
+          rarity: "common",
+          stats: { attack: 3 },
+          minFloor: 1,
+          cost: 35,
+          weapon: {
+            knockback: 100,
+            atkSpeed: 0.32,
+            range: 42,
+            size: { w: 44, h: 6 },
+          },
+        },
+        {
+          id: "iron_lance",
+          name: "Iron Lance",
+          slot: "weapon",
+          set: "iron",
+          rarity: "uncommon",
+          stats: { attack: 5 },
+          minFloor: 3,
+          cost: 95,
+          weapon: {
+            knockback: 120,
+            atkSpeed: 0.3,
+            range: 46,
+            size: { w: 48, h: 6 },
+          },
+        },
+        {
+          id: "shadow_pike",
+          name: "Shadow Pike",
+          slot: "weapon",
+          set: "shadow",
+          rarity: "rare",
+          stats: { attack: 7, crit: 8 },
+          minFloor: 6,
+          cost: 200,
+          weapon: {
+            knockback: 130,
+            atkSpeed: 0.28,
+            range: 48,
+            size: { w: 50, h: 6 },
+          },
+        },
+        // Axes: medium speed, high damage, good knockback
+        {
+          id: "hand_axe",
+          name: "Hand Axe",
+          slot: "weapon",
+          set: "iron",
+          rarity: "uncommon",
+          stats: { attack: 8 },
+          minFloor: 4,
+          cost: 105,
+          weapon: {
+            knockback: 250,
+            atkSpeed: 0.38,
+            range: 28,
+            size: { w: 30, h: 14 },
+          },
+        },
+        {
+          id: "fire_axe",
+          name: "Fire Axe",
+          slot: "weapon",
+          set: "fire",
+          rarity: "epic",
+          stats: { attack: 14, crit: 5 },
+          minFloor: 10,
+          cost: 390,
+          weapon: {
+            knockback: 280,
+            atkSpeed: 0.35,
+            range: 30,
+            size: { w: 32, h: 14 },
+          },
+        },
+        // Whips: fast, medium range, low knockback, hits multiple
+        {
+          id: "leather_whip",
+          name: "Leather Whip",
+          slot: "weapon",
+          set: "leather",
+          rarity: "common",
+          stats: { attack: 2 },
+          minFloor: 2,
+          cost: 38,
+          weapon: {
+            knockback: 60,
+            atkSpeed: 0.22,
+            range: 38,
+            size: { w: 40, h: 6 },
+          },
+        },
+        {
+          id: "shadow_lash",
+          name: "Shadow Lash",
+          slot: "weapon",
+          set: "shadow",
+          rarity: "rare",
+          stats: { attack: 5, crit: 10, speed: 10 },
+          minFloor: 7,
+          cost: 210,
+          weapon: {
+            knockback: 70,
+            atkSpeed: 0.2,
+            range: 42,
+            size: { w: 44, h: 6 },
+          },
         },
       ];
       const CONSUMABLES = [
@@ -642,10 +884,9 @@
         },
       };
 
-      // ==================== SAVE / LOAD ====================
       function saveGame() {
         try {
-          let data = {
+          let d = {
             level: PD.level,
             xp: PD.xp,
             xpToNext: PD.xpToNext,
@@ -669,97 +910,82 @@
             totalRuns: PD.totalRuns,
             timestamp: Date.now(),
           };
-          for (let slot in PD.equipment) {
-            data.equipment[slot] = PD.equipment[slot]
-              ? { ...PD.equipment[slot] }
-              : null;
-          }
-          data.inventory = PD.inventory.map((it) => ({ ...it }));
-          data.consumables = PD.consumables.map((c) => ({ ...c }));
-          localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+          for (let s in PD.equipment)
+            d.equipment[s] = PD.equipment[s] ? { ...PD.equipment[s] } : null;
+          d.inventory = PD.inventory.map((i) => ({ ...i }));
+          d.consumables = PD.consumables.map((c) => ({ ...c }));
+          localStorage.setItem(SAVE_KEY, JSON.stringify(d));
           return true;
         } catch (e) {
-          console.error("Save failed:", e);
           return false;
         }
       }
-
       function loadGame() {
         try {
-          let raw = localStorage.getItem(SAVE_KEY);
-          if (!raw) return false;
-          let data = JSON.parse(raw);
-          if (!data || !data.timestamp) return false;
-          PD.level = data.level || 1;
-          PD.xp = data.xp || 0;
-          PD.xpToNext = data.xpToNext || 100;
-          PD.floor = data.floor || 1;
-          PD.gold = data.gold || 0;
-          PD.hp = data.hp || 100;
-          PD.maxHp = data.maxHp || 100;
-          PD.baseAttack = data.baseAttack || 5;
-          PD.baseDefense = data.baseDefense || 2;
-          PD.baseSpeed = data.baseSpeed || MOVE_SPD;
-          PD.baseCrit = data.baseCrit || 5;
-          PD.talentPoints = data.talentPoints || 0;
-          PD.talents = data.talents || {};
-          PD.shieldHits = data.shieldHits || 0;
-          PD.kills = data.kills || 0;
-          PD.totalGold = data.totalGold || 0;
-          PD.bestFloor = data.bestFloor || 0;
-          PD.totalRuns = data.totalRuns || 0;
+          let r = localStorage.getItem(SAVE_KEY);
+          if (!r) return false;
+          let d = JSON.parse(r);
+          if (!d || !d.timestamp) return false;
+          PD.level = d.level || 1;
+          PD.xp = d.xp || 0;
+          PD.xpToNext = d.xpToNext || 100;
+          PD.floor = d.floor || 1;
+          PD.gold = d.gold || 0;
+          PD.hp = d.hp || 100;
+          PD.maxHp = d.maxHp || 100;
+          PD.baseAttack = d.baseAttack || 5;
+          PD.baseDefense = d.baseDefense || 2;
+          PD.baseSpeed = d.baseSpeed || MOVE_SPD;
+          PD.baseCrit = d.baseCrit || 5;
+          PD.talentPoints = d.talentPoints || 0;
+          PD.talents = d.talents || {};
+          PD.shieldHits = d.shieldHits || 0;
+          PD.kills = d.kills || 0;
+          PD.totalGold = d.totalGold || 0;
+          PD.bestFloor = d.bestFloor || 0;
+          PD.totalRuns = d.totalRuns || 0;
           PD.tempBuffs = { atk: 0, spd: 0 };
           PD.phoenixUsed = false;
-          for (let slot in data.equipment) {
-            PD.equipment[slot] = data.equipment[slot] || null;
-          }
-          PD.inventory = (data.inventory || []).map((it) => ({ ...it }));
-          PD.consumables = (data.consumables || []).map((c) => ({ ...c }));
+          for (let s in d.equipment) PD.equipment[s] = d.equipment[s] || null;
+          PD.inventory = (d.inventory || []).map((i) => ({ ...i }));
+          PD.consumables = (d.consumables || []).map((c) => ({ ...c }));
           return true;
         } catch (e) {
-          console.error("Load failed:", e);
           return false;
         }
       }
-
       function hasSave() {
         try {
-          let raw = localStorage.getItem(SAVE_KEY);
-          if (!raw) return false;
-          let data = JSON.parse(raw);
-          return data && data.timestamp && data.floor > 0;
+          let r = localStorage.getItem(SAVE_KEY);
+          if (!r) return false;
+          let d = JSON.parse(r);
+          return d && d.timestamp && d.floor > 0;
         } catch (e) {
           return false;
         }
       }
-
       function deleteSave() {
         try {
           localStorage.removeItem(SAVE_KEY);
         } catch (e) {}
       }
-
       function getSaveInfo() {
         try {
-          let raw = localStorage.getItem(SAVE_KEY);
-          if (!raw) return null;
-          let data = JSON.parse(raw);
-          if (!data) return null;
-          let age = Date.now() - data.timestamp;
-          let mins = Math.floor(age / 60000);
-          let timeStr =
-            mins < 60 ? mins + "m ago" : Math.floor(mins / 60) + "h ago";
+          let r = localStorage.getItem(SAVE_KEY);
+          if (!r) return null;
+          let d = JSON.parse(r);
+          if (!d) return null;
+          let m = Math.floor((Date.now() - d.timestamp) / 60000);
           return {
-            floor: data.floor,
-            level: data.level,
-            gold: data.gold,
-            time: timeStr,
+            floor: d.floor,
+            level: d.level,
+            gold: d.gold,
+            time: m < 60 ? m + "m ago" : Math.floor(m / 60) + "h ago",
           };
         } catch (e) {
           return null;
         }
       }
-      // ==================== END SAVE/LOAD ====================
 
       function getTalentRank(id) {
         return PD.talents[id] || 0;
@@ -783,8 +1009,8 @@
         s.attack += PD.level - 1;
         s.defense += Math.floor((PD.level - 1) * 0.5);
         let sc = {};
-        for (let slot in PD.equipment) {
-          let it = PD.equipment[slot];
+        for (let sl in PD.equipment) {
+          let it = PD.equipment[sl];
           if (!it) continue;
           for (let k in it.stats) if (s[k] !== undefined) s[k] += it.stats[k];
           sc[it.set] = (sc[it.set] || 0) + 1;
@@ -833,8 +1059,8 @@
       function getSetBonusLabels() {
         let labels = [],
           sc = {};
-        for (let slot in PD.equipment) {
-          let it = PD.equipment[slot];
+        for (let sl in PD.equipment) {
+          let it = PD.equipment[sl];
           if (it) sc[it.set] = (sc[it.set] || 0) + 1;
         }
         for (let sn in sc) {
@@ -846,9 +1072,8 @@
         return labels;
       }
 
-      // ==================== LEVEL GENERATION ====================
       function isSolid(v) {
-        return v === 1 || v === 2 || v === 3 || v === 6;
+        return v === 1 || v === 2 || v === 3 || v === 6 || v === 7 || v === 8;
       }
       function floodReachable(map, startR, startC) {
         let visited = new Set();
@@ -944,6 +1169,8 @@
         }
         return visited;
       }
+
+      // map cell types: 0=air, 1=ground, 2=wall, 3=platform, 4=spike, 5=ladder, 6=breakable, 7=ice, 8=crumble, 9=fire_trap, 10=moving_platform(marker), 11=decor
       function generateMapData() {
         let map = [];
         for (let r = 0; r < ROWS; r++) {
@@ -973,6 +1200,8 @@
           y -= 2 + Math.floor(Math.random() * 2);
         }
         let allSegments = [];
+        let biome = getBiome(PD.floor);
+        let biomeKey = Object.keys(BIOMES).find((k) => BIOMES[k] === biome);
         for (let ly of layerRows) {
           let c = 1 + Math.floor(Math.random() * 3);
           while (c < COLS - 3) {
@@ -985,13 +1214,20 @@
               let ny = ly + shift;
               if (ny > 2 && ny < ROWS - 3) actualY = ny;
             }
+            // Choose platform type based on biome and randomness
+            let platType = 3; // normal
+            if (biomeKey === "ice" && Math.random() < 0.4)
+              platType = 7; // ice
+            else if (PD.floor >= 3 && Math.random() < 0.15) platType = 7; // ice in other biomes
+            if (PD.floor >= 4 && Math.random() < 0.12) platType = 8; // crumbling
             for (let cc = c; cc < c + pw; cc++) {
-              if (map[actualY][cc] === 0) map[actualY][cc] = 3;
+              if (map[actualY][cc] === 0) map[actualY][cc] = platType;
             }
-            allSegments.push({ r: actualY, c: c, w: pw });
+            allSegments.push({ r: actualY, c: c, w: pw, type: platType });
             c += pw + 2 + Math.floor(Math.random() * 3);
           }
         }
+        // Terrain features
         let featureCount = 2 + Math.floor(Math.random() * 3);
         for (let i = 0; i < featureCount; i++) {
           let fc = 5 + Math.floor(Math.random() * (COLS - 10)),
@@ -1001,6 +1237,7 @@
             if (map[r][fc] === 0) map[r][fc] = 1;
           }
         }
+        // Ladders for unreachable segments
         for (let li = 0; li < layerRows.length; li++) {
           let layerR = layerRows[li];
           let belowR = li === 0 ? ROWS - 2 : layerRows[li - 1];
@@ -1039,11 +1276,12 @@
             }
           }
         }
-        let extraLadders = 2 + Math.floor(Math.random() * 3);
-        for (let i = 0; i < extraLadders; i++) {
+        // Extra ladders & ropes
+        let el = 2 + Math.floor(Math.random() * 3);
+        for (let i = 0; i < el; i++) {
           let lc = 3 + Math.floor(Math.random() * (COLS - 6));
           for (let r = 3; r < ROWS - 4; r++) {
-            if (map[r][lc] === 3 && map[r + 1][lc] === 0) {
+            if (isSolid(map[r][lc]) && map[r + 1][lc] === 0) {
               let len = 3 + Math.floor(Math.random() * 5);
               for (let rr = r + 1; rr < r + 1 + len && rr < ROWS - 2; rr++) {
                 if (map[rr][lc] === 0) map[rr][lc] = 5;
@@ -1053,8 +1291,8 @@
             }
           }
         }
-        let groundLadders = 2 + Math.floor(Math.random() * 2);
-        for (let i = 0; i < groundLadders; i++) {
+        let gl = 2 + Math.floor(Math.random() * 2);
+        for (let i = 0; i < gl; i++) {
           let lc = 4 + Math.floor(Math.random() * (COLS - 8));
           if (layerRows.length > 0) {
             let tR = layerRows[0];
@@ -1064,6 +1302,7 @@
             }
           }
         }
+        // Spikes
         let spkCh = 0.01 + PD.floor * 0.004;
         for (let r = 2; r < ROWS - 2; r++)
           for (let c = 3; c < COLS - 3; c++) {
@@ -1077,8 +1316,67 @@
               map[r - 1][c] = 4;
             }
           }
+        // Fire traps (floor >= 5)
+        if (PD.floor >= 5) {
+          let ftCount = 1 + Math.floor(PD.floor / 5);
+          for (let i = 0; i < ftCount; i++) {
+            let fc = 5 + Math.floor(Math.random() * (COLS - 10));
+            for (let r = ROWS - 3; r > 3; r--) {
+              if (isSolid(map[r][fc]) && map[r - 1][fc] === 0) {
+                map[r - 1][fc] = 9;
+                break;
+              }
+            }
+          }
+        }
+        // Moving platform markers (floor >= 3)
+        if (PD.floor >= 3) {
+          let mpCount = 1 + Math.floor(PD.floor / 4);
+          for (let i = 0; i < mpCount; i++) {
+            let mc = 5 + Math.floor(Math.random() * (COLS - 10));
+            let mr = 5 + Math.floor(Math.random() * (ROWS - 10));
+            if (
+              map[mr][mc] === 0 &&
+              map[mr][mc + 1] === 0 &&
+              map[mr][mc + 2] === 0
+            ) {
+              map[mr][mc] = 10;
+              map[mr][mc + 1] = 10;
+              map[mr][mc + 2] = 10;
+            }
+          }
+        }
+        // Decorations (stalactites, mushrooms, bones)
+        let decoCount = 5 + Math.floor(Math.random() * 8);
+        for (let i = 0; i < decoCount; i++) {
+          let dc = 2 + Math.floor(Math.random() * (COLS - 4));
+          let dr = 2 + Math.floor(Math.random() * (ROWS - 4));
+          if (map[dr][dc] === 0) {
+            // only place in air, check something solid nearby
+            let nearSolid = false;
+            for (let dd of [
+              [-1, 0],
+              [1, 0],
+              [0, -1],
+              [0, 1],
+            ]) {
+              let nr = dr + dd[0],
+                nc = dc + dd[1];
+              if (
+                nr >= 0 &&
+                nr < ROWS &&
+                nc >= 0 &&
+                nc < COLS &&
+                isSolid(map[nr][nc])
+              )
+                nearSolid = true;
+            }
+            if (nearSolid) map[dr][dc] = 11;
+          }
+        }
         return map;
       }
+
       function validateLevel(map) {
         let playerC = 3,
           playerR = -1;
@@ -1231,14 +1529,24 @@
         }
         return map;
       }
-      // ==================== END LEVEL GENERATION ====================
-
+      function getWeaponProps() {
+        let wp = PD.equipment.weapon;
+        if (wp && wp.weapon) return wp.weapon;
+        // Default: bare fists
+        return {
+          knockback: 120,
+          atkSpeed: 0.3,
+          range: 26,
+          size: { w: 28, h: 10 },
+        };
+      }
       class BootScene extends Phaser.Scene {
         constructor() {
           super("BootScene");
         }
         create() {
           const g = this.make.graphics({ x: 0, y: 0, add: false });
+          // Player sprites
           g.clear();
           g.fillStyle(0x3399ff);
           g.fillRect(6, 0, 20, 32);
@@ -1273,6 +1581,7 @@
           g.fillRect(8, 26, 6, 4);
           g.fillRect(18, 26, 6, 4);
           g.generateTexture("player_jump", 32, 32);
+          // Biome tiles
           for (let bk in BIOMES) {
             let bi = BIOMES[bk];
             g.clear();
@@ -1303,6 +1612,30 @@
             g.fillRect(0, 0, 32, 8);
             g.generateTexture("platform_" + bk, 32, 32);
           }
+          // Special platform: ice
+          g.clear();
+          g.fillStyle(0x99ddff);
+          g.fillRect(0, 0, 32, 32);
+          g.fillStyle(0xbbeeff);
+          g.fillRect(0, 0, 32, 8);
+          g.fillStyle(0xffffff, 0.4);
+          g.fillRect(4, 4, 8, 3);
+          g.fillRect(18, 12, 6, 3);
+          g.generateTexture("ice_platform", 32, 32);
+          // Special platform: crumbling
+          g.clear();
+          g.fillStyle(0x998866);
+          g.fillRect(0, 0, 32, 32);
+          g.fillStyle(0x887755);
+          g.fillRect(0, 0, 32, 8);
+          g.fillStyle(0x776644);
+          g.fillRect(4, 20, 6, 6);
+          g.fillRect(22, 16, 5, 5);
+          g.lineStyle(1, 0x665533);
+          g.lineBetween(8, 10, 24, 14);
+          g.lineBetween(2, 18, 14, 22);
+          g.generateTexture("crumble_platform", 32, 32);
+          // Spike, coin, chest, exit, etc
           g.clear();
           g.fillStyle(0xaaaaaa);
           g.fillTriangle(4, 32, 16, 4, 28, 32);
@@ -1357,6 +1690,44 @@
           g.fillStyle(0x664422);
           g.fillRect(4, 4, 24, 24);
           g.generateTexture("breakable", 32, 32);
+          // Fire trap
+          g.clear();
+          g.fillStyle(0x444444);
+          g.fillRect(0, 20, 32, 12);
+          g.fillStyle(0xff4400);
+          g.fillTriangle(4, 20, 16, 2, 28, 20);
+          g.fillStyle(0xff8800, 0.6);
+          g.fillTriangle(8, 20, 16, 6, 24, 20);
+          g.generateTexture("fire_trap", 32, 32);
+          // Moving platform
+          g.clear();
+          g.fillStyle(0x66aa66);
+          g.fillRect(0, 0, 96, 16);
+          g.fillStyle(0x88cc88);
+          g.fillRect(0, 0, 96, 5);
+          g.fillStyle(0x558855);
+          g.fillRect(2, 8, 4, 4);
+          g.fillRect(44, 8, 4, 4);
+          g.fillRect(88, 8, 4, 4);
+          g.generateTexture("moving_platform", 96, 16);
+          // Decorations
+          g.clear();
+          g.fillStyle(0x666666, 0.5);
+          g.fillTriangle(2, 0, 8, 16, 14, 0);
+          g.generateTexture("deco_stalactite", 16, 16);
+          g.clear();
+          g.fillStyle(0x44aa44, 0.6);
+          g.fillCircle(6, 10, 5);
+          g.fillStyle(0x338833, 0.6);
+          g.fillCircle(10, 8, 4);
+          g.fillRect(7, 10, 2, 6);
+          g.generateTexture("deco_mushroom", 16, 16);
+          g.clear();
+          g.fillStyle(0xccccaa, 0.4);
+          g.fillRect(0, 8, 14, 4);
+          g.fillRect(4, 4, 4, 8);
+          g.generateTexture("deco_bones", 16, 16);
+          // Enemies
           for (let en in ENEMY_DEFS) {
             let ed = ENEMY_DEFS[en];
             g.clear();
@@ -1431,9 +1802,8 @@
               fontFamily: "monospace",
             })
             .setOrigin(0.5);
-
           let btnY = 220;
-          let newGame = this.add
+          let ng = this.add
             .text(400, btnY, "[ NEW GAME ]", {
               fontSize: "24px",
               fill: "#55ff55",
@@ -1441,18 +1811,17 @@
             })
             .setOrigin(0.5)
             .setInteractive({ useHandCursor: true });
-          newGame.on("pointerover", () => newGame.setFill("#88ff88"));
-          newGame.on("pointerout", () => newGame.setFill("#55ff55"));
-          newGame.on("pointerdown", () => {
+          ng.on("pointerover", () => ng.setFill("#88ff88"));
+          ng.on("pointerout", () => ng.setFill("#55ff55"));
+          ng.on("pointerdown", () => {
             PD.reset();
             PD.totalRuns++;
             saveGame();
             this.scene.start("GameScene");
           });
-
           if (hasSave()) {
             let info = getSaveInfo();
-            let contBtn = this.add
+            let cb = this.add
               .text(400, btnY + 45, "[ CONTINUE ]", {
                 fontSize: "24px",
                 fill: "#44aaff",
@@ -1460,13 +1829,13 @@
               })
               .setOrigin(0.5)
               .setInteractive({ useHandCursor: true });
-            contBtn.on("pointerover", () => contBtn.setFill("#88ccff"));
-            contBtn.on("pointerout", () => contBtn.setFill("#44aaff"));
-            contBtn.on("pointerdown", () => {
+            cb.on("pointerover", () => cb.setFill("#88ccff"));
+            cb.on("pointerout", () => cb.setFill("#44aaff"));
+            cb.on("pointerdown", () => {
               loadGame();
               this.scene.start("GameScene");
             });
-            if (info) {
+            if (info)
               this.add
                 .text(
                   400,
@@ -1486,9 +1855,7 @@
                   },
                 )
                 .setOrigin(0.5);
-            }
-
-            let delBtn = this.add
+            let db = this.add
               .text(400, btnY + 100, "[ DELETE SAVE ]", {
                 fontSize: "14px",
                 fill: "#ff6666",
@@ -1496,18 +1863,13 @@
               })
               .setOrigin(0.5)
               .setInteractive({ useHandCursor: true });
-            delBtn.on("pointerover", () => delBtn.setFill("#ff9999"));
-            delBtn.on("pointerout", () => delBtn.setFill("#ff6666"));
-            delBtn.on("pointerdown", () => {
+            db.on("pointerdown", () => {
               deleteSave();
               this.scene.restart();
             });
             btnY += 120;
-          } else {
-            btnY += 50;
-          }
-
-          if (PD.bestFloor > 0) {
+          } else btnY += 50;
+          if (PD.bestFloor > 0)
             this.add
               .text(
                 400,
@@ -1516,19 +1878,14 @@
                 { fontSize: "12px", fill: "#888", fontFamily: "monospace" },
               )
               .setOrigin(0.5);
-            btnY += 30;
-          }
-
-          let controls = [
+          [
             "Arrows/WASD: Move & Jump",
             "Z/J: Attack   X/K: Dash",
             "1-4: Consumables",
-            "Collect equipment sets!",
-            "Boss every 5 floors!",
-          ];
-          controls.forEach((t, i) =>
+            "Jump from ladders! Coyote jump!",
+          ].forEach((t, i) =>
             this.add
-              .text(400, btnY + 30 + i * 20, t, {
+              .text(400, btnY + 40 + i * 20, t, {
                 fontSize: "12px",
                 fill: "#6666aa",
                 fontFamily: "monospace",
@@ -1555,6 +1912,12 @@
           this.walkFrame = 0;
           this.walkTimer = 0;
           this._exitMsgCd = 0;
+          // Movement feel
+          this.coyoteTimer = 0; // time since last grounded
+          this.jumpBufferTimer = 0; // time since jump pressed
+          this.wasOnFloor = false;
+          this.onIce = false;
+          this.playerVx = 0; // smoothed velocity for ice
           this.isBossFloor = getBoss(PD.floor) !== null;
           let biome = getBiome(PD.floor);
           this.currentBiome = biome;
@@ -1573,15 +1936,27 @@
             .setAlpha(0.2)
             .setDepth(-2);
           this.platforms = this.physics.add.staticGroup();
+          this.icePlatforms = this.physics.add.staticGroup();
+          this.crumblePlatforms = this.physics.add.staticGroup();
           this.spikes = this.physics.add.staticGroup();
+          this.fireTraps = this.physics.add.staticGroup();
           this.ladders = this.physics.add.staticGroup();
           this.breakables = this.physics.add.staticGroup();
+          this.movingPlatforms = this.physics.add.group({
+            allowGravity: false,
+            immovable: true,
+          });
+
           let levelData = null;
           for (let attempt = 0; attempt < 50; attempt++) {
             this.platforms.clear(true, true);
+            this.icePlatforms.clear(true, true);
+            this.crumblePlatforms.clear(true, true);
             this.spikes.clear(true, true);
+            this.fireTraps.clear(true, true);
             this.ladders.clear(true, true);
             this.breakables.clear(true, true);
+            this.movingPlatforms.clear(true, true);
             let map = generateMapData();
             let v = validateLevel(map);
             if (v && v.valid) {
@@ -1591,9 +1966,13 @@
           }
           if (!levelData) {
             this.platforms.clear(true, true);
+            this.icePlatforms.clear(true, true);
+            this.crumblePlatforms.clear(true, true);
             this.spikes.clear(true, true);
+            this.fireTraps.clear(true, true);
             this.ladders.clear(true, true);
             this.breakables.clear(true, true);
+            this.movingPlatforms.clear(true, true);
             let map = generateFallbackMap();
             levelData = {
               map,
@@ -1627,7 +2006,9 @@
             let spot = breakSpots.pop();
             if (map[spot.r][spot.c] === 0) map[spot.r][spot.c] = 6;
           }
+
           let bk = this.biomeKey;
+          let decoTextures = ["deco_stalactite", "deco_mushroom", "deco_bones"];
           for (let r = 0; r < ROWS; r++)
             for (let c = 0; c < COLS; c++) {
               let tx = c * TW + TW / 2,
@@ -1659,12 +2040,66 @@
                   br.hp = 3;
                   break;
                 }
+                case 7: {
+                  let ip = this.icePlatforms.create(tx, ty, "ice_platform");
+                  ip.isIce = true;
+                  break;
+                }
+                case 8: {
+                  let cp = this.crumblePlatforms.create(
+                    tx,
+                    ty,
+                    "crumble_platform",
+                  );
+                  cp.crumbleTimer = -1;
+                  break;
+                }
+                case 9: {
+                  let ft = this.fireTraps.create(tx, ty, "fire_trap");
+                  ft.fireTimer = 0;
+                  ft.fireActive = false;
+                  ft.fireCycle = 2 + Math.random() * 2;
+                  break;
+                }
+                case 10: {
+                  if (c > 0 && map[r][c - 1] === 10) break;
+                  let mw = 0;
+                  for (let cc = c; cc < COLS && map[r][cc] === 10; cc++) mw++;
+                  let mp = this.movingPlatforms.create(
+                    tx + ((mw - 1) * TW) / 2,
+                    ty,
+                    "moving_platform",
+                  );
+                  mp.setDisplaySize(mw * TW, 16);
+                  mp.body.setSize(mw * TW, 12);
+                  mp.body.setImmovable(true);
+                  mp.body.setAllowGravity(false);
+                  mp.moveSpeed = 25 + Math.random() * 20;
+                  mp.startX = mp.x;
+                  mp.moveRange = 2 * TW + Math.random() * 2 * TW;
+                  mp.movePhase = Math.random() * Math.PI * 2;
+                  break;
+                }
+                case 11: {
+                  let d = this.add
+                    .image(
+                      tx,
+                      ty,
+                      decoTextures[
+                        Math.floor(Math.random() * decoTextures.length)
+                      ],
+                    )
+                    .setAlpha(0.5)
+                    .setDepth(-1);
+                  break;
+                }
               }
             }
+
           this.platformRows = [];
           for (let r = 2; r < ROWS - 2; r++)
             for (let c = 1; c < COLS - 1; c++) {
-              if (map[r][c] === 3) {
+              if (map[r][c] === 3 || map[r][c] === 7 || map[r][c] === 8) {
                 this.platformRows.push(r);
                 break;
               }
@@ -1681,6 +2116,9 @@
           this.player.body.setSize(16, 24);
           this.player.body.setOffset(8, 8);
           this.player.setDepth(10);
+          // Player drag for normal ground
+          this.player.body.setDragX(600);
+
           this.exit = this.physics.add.sprite(
             v.exitC * TW + TW / 2,
             v.exitR * TH + TH / 2,
@@ -1703,16 +2141,71 @@
               .image(0, 0, "shield_fx")
               .setAlpha(0.4)
               .setDepth(11);
+
+          // Collisions
           this.physics.add.collider(this.player, this.platforms);
+          this.physics.add.collider(
+            this.player,
+            this.icePlatforms,
+            (player, ice) => {
+              this.onIce = true;
+            },
+          );
+          this.physics.add.collider(
+            this.player,
+            this.crumblePlatforms,
+            (player, cp) => {
+              if (cp.crumbleTimer < 0) {
+                cp.crumbleTimer = 0.5;
+                cp.setTint(0xff8888);
+                this.tweens.add({
+                  targets: cp,
+                  alpha: 0.3,
+                  duration: 400,
+                  onComplete: () => {
+                    // spawn particles
+                    for (let i = 0; i < 4; i++) {
+                      let p = this.add
+                        .circle(
+                          cp.x + Phaser.Math.Between(-12, 12),
+                          cp.y,
+                          3,
+                          0x887766,
+                        )
+                        .setDepth(5);
+                      this.tweens.add({
+                        targets: p,
+                        y: p.y + 40,
+                        alpha: 0,
+                        duration: 500,
+                        onComplete: () => p.destroy(),
+                      });
+                    }
+                    cp.destroy();
+                  },
+                });
+              }
+            },
+          );
           this.physics.add.collider(this.player, this.breakables);
+          this.physics.add.collider(this.player, this.movingPlatforms);
           this.physics.add.collider(this.enemies, this.platforms);
+          this.physics.add.collider(this.enemies, this.icePlatforms);
           this.physics.add.collider(this.enemies, this.breakables);
           this.physics.add.collider(this.coins, this.platforms);
+          this.physics.add.collider(this.coins, this.icePlatforms);
           this.physics.add.collider(this.itemDrops, this.platforms);
           this.physics.add.overlap(
             this.player,
             this.spikes,
             this.hitSpike,
+            null,
+            this,
+          );
+          this.physics.add.overlap(
+            this.player,
+            this.fireTraps,
+            this.hitFireTrap,
             null,
             this,
           );
@@ -1758,6 +2251,7 @@
             null,
             this,
           );
+
           this.cursors = this.input.keyboard.createCursorKeys();
           this.keys = this.input.keyboard.addKeys({
             w: "W",
@@ -1801,7 +2295,6 @@
             onComplete: () => ft.destroy(),
           });
           this.cameras.main.fadeIn(400);
-          // autosave on floor start
           saveGame();
         }
 
@@ -1816,13 +2309,13 @@
           let spots = [...this.validEnemySpots];
           Phaser.Utils.Array.Shuffle(spots);
           for (let i = 0; i < count && spots.length > 0; i++) {
-            let spot = spots.pop();
-            let type = types[Math.floor(Math.random() * types.length)];
+            let s = spots.pop();
+            let t = types[Math.floor(Math.random() * types.length)];
             this.createEnemy(
-              type,
-              ENEMY_DEFS[type],
-              spot.c * TW + TW / 2,
-              spot.r * TH + TH / 2,
+              t,
+              ENEMY_DEFS[t],
+              s.c * TW + TW / 2,
+              s.r * TH + TH / 2,
             );
           }
         }
@@ -1887,13 +2380,13 @@
           let ac = 2 + Math.floor(PD.floor / 10);
           let types = Object.keys(ENEMY_DEFS);
           for (let i = 0; i < ac && spots.length > 0; i++) {
-            let spot = spots.pop();
+            let sp = spots.pop();
             let t = types[Math.floor(Math.random() * types.length)];
             this.createEnemy(
               t,
               ENEMY_DEFS[t],
-              spot.c * TW + TW / 2,
-              spot.r * TH + TH / 2,
+              sp.c * TW + TW / 2,
+              sp.r * TH + TH / 2,
             );
           }
         }
@@ -2020,12 +2513,17 @@
             onComplete: () => t.destroy(),
           });
         }
-        hitSpike(player) {
+        hitSpike(p) {
           if (this.invTimer > 0 || this.gameOver) return;
           this.takeDamage(10 + PD.floor * 2);
-          player.setVelocityY(JUMP_VEL * 0.5);
+          p.setVelocityY(JUMP_VEL * 0.5);
         }
-        hitProjectile(player, proj) {
+        hitFireTrap(p, trap) {
+          if (this.invTimer > 0 || this.gameOver || !trap.fireActive) return;
+          this.takeDamage(8 + PD.floor * 3);
+          p.setVelocityY(JUMP_VEL * 0.4);
+        }
+        hitProjectile(p, proj) {
           if (this.invTimer > 0 || this.gameOver) return;
           this.takeDamage(proj.damage || 5);
           proj.destroy();
@@ -2130,18 +2628,8 @@
               .setOrigin(0.5)
               .setScrollFactor(0)
               .setDepth(91);
-            this.add
-              .text(
-                400,
-                265,
-                "Gold Earned:" + PD.totalGold + " Best Floor:" + PD.bestFloor,
-                { fontSize: "13px", fill: "#ffdd44", fontFamily: "monospace" },
-              )
-              .setOrigin(0.5)
-              .setScrollFactor(0)
-              .setDepth(91);
             let retry = this.add
-              .text(400, 320, "[ NEW RUN ]", {
+              .text(400, 310, "[ NEW RUN ]", {
                 fontSize: "24px",
                 fill: "#55ff55",
                 fontFamily: "monospace",
@@ -2158,7 +2646,7 @@
               this.scene.start("MenuScene");
             });
             let menu = this.add
-              .text(400, 360, "[ MAIN MENU ]", {
+              .text(400, 350, "[ MAIN MENU ]", {
                 fontSize: "18px",
                 fill: "#aaaaff",
                 fontFamily: "monospace",
@@ -2369,17 +2857,20 @@
         }
         doAttack() {
           if (this.attackTimer > 0 || this.gameOver) return;
-          this.attackTimer = 0.35;
-          let stats = getStats(),
-            dir = this.facingRight ? 1 : -1;
+          let stats = getStats();
+          let wp = getWeaponProps();
+          this.attackTimer = wp.atkSpeed;
+          let dir = this.facingRight ? 1 : -1;
           let slash = this.physics.add.sprite(
-            this.player.x + dir * 28,
+            this.player.x + dir * wp.range,
             this.player.y,
             "slash",
           );
           slash.body.setAllowGravity(false);
           slash.setFlipX(!this.facingRight);
-          slash.setAlpha(0.8).setDepth(9).setScale(1.2);
+          slash.setAlpha(0.8).setDepth(9);
+          slash.body.setSize(wp.size.w, wp.size.h);
+          slash.setDisplaySize(wp.size.w, wp.size.h);
           let hitSet = new Set();
           let oc = this.physics.add.overlap(slash, this.enemies, (s, enemy) => {
             if (!enemy.active || hitSet.has(enemy)) return;
@@ -2389,8 +2880,8 @@
             let crit = Math.random() * 100 < stats.crit;
             if (crit) dmg = Math.floor(dmg * 2.2);
             let kbDir = this.player.x < enemy.x ? 1 : -1;
-            enemy.setVelocityX(kbDir * (180 + stats.attack * 3));
-            enemy.setVelocityY(-120);
+            enemy.setVelocityX(kbDir * wp.knockback);
+            enemy.setVelocityY(-80 - wp.knockback * 0.2);
             this.damageEnemy(enemy, dmg, crit);
             if (stats.lifesteal > 0 && enemy.active && enemy.ehp > 0) {
               let heal = Math.max(1, Math.floor((dmg * stats.lifesteal) / 100));
@@ -2422,7 +2913,7 @@
           this.tweens.add({
             targets: slash,
             alpha: 0,
-            duration: 180,
+            duration: Math.floor(wp.atkSpeed * 400),
             onComplete: () => {
               this.physics.world.removeCollider(oc);
               this.physics.world.removeCollider(oc2);
@@ -2547,6 +3038,7 @@
           });
           enemy.destroy();
         }
+
         updateEnemyAI(e, dt) {
           if (!e.active) return;
           if (e.hitFlash > 0) {
@@ -2659,6 +3151,21 @@
           if (e.nameTag) e.nameTag.setPosition(e.x, e.y - bo - 12);
         }
 
+        performJump() {
+          let stats = getStats();
+          this.player.setVelocityY(JUMP_VEL);
+          this.coyoteTimer = COYOTE_TIME + 1; // consume coyote
+          this.jumpBufferTimer = JUMP_BUFFER + 1; // consume buffer
+          // Squash & stretch feedback
+          this.tweens.add({
+            targets: this.player,
+            scaleX: 0.85,
+            scaleY: 1.15,
+            duration: 80,
+            yoyo: true,
+          });
+        }
+
         update(time, delta) {
           if (this.gameOver) return;
           let dt = delta / 1000,
@@ -2716,7 +3223,32 @@
               });
             }
           }
+
+          // Update fire traps
+          this.fireTraps.children.each((ft) => {
+            if (!ft.active) return;
+            ft.fireTimer += dt;
+            let phase = ft.fireTimer % ft.fireCycle;
+            ft.fireActive = phase < 0.8;
+            ft.setAlpha(ft.fireActive ? 1 : 0.4);
+          });
+
+          // Update moving platforms - use sine wave for smooth movement
+          this.movingPlatforms.children.each((mp) => {
+            if (!mp.active) return;
+            mp.movePhase += dt * mp.moveSpeed * 0.03;
+            let newX = mp.startX + Math.sin(mp.movePhase) * mp.moveRange;
+            mp.body.velocity.x = ((newX - mp.x) / dt) * 0.5;
+            // Clamp to prevent going out of bounds
+            if (mp.x < TW * 2 || mp.x > WORLD_W - TW * 2)
+              mp.body.velocity.x *= -1;
+          });
+
           let onFloor = this.player.body.blocked.down;
+          // Reset ice flag each frame, set by collision callback
+          let wasIce = this.onIce;
+          this.onIce = false;
+          // Check ladder overlap
           let onLadder = false;
           this.ladders.children.each((l) => {
             if (
@@ -2728,64 +3260,120 @@
             )
               onLadder = true;
           });
+
+          // === COYOTE TIME ===
+          if (onFloor || onLadder) {
+            this.coyoteTimer = 0;
+            this.wasOnFloor = true;
+          } else {
+            this.coyoteTimer += dt;
+          }
+          let canCoyoteJump = this.coyoteTimer < COYOTE_TIME;
+
+          // === JUMP BUFFER ===
+          let jumpPressed =
+            Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
+            Phaser.Input.Keyboard.JustDown(this.keys.w);
+          if (jumpPressed) this.jumpBufferTimer = 0;
+          else this.jumpBufferTimer += dt;
+          let hasBufferedJump = this.jumpBufferTimer < JUMP_BUFFER;
+
+          // === EXTRA JUMPS ===
+          if (onFloor) this.extraJumps = stats.doubleJump ? 1 : 0;
+
           if (this.dashTimer <= 0) {
-            let mx = 0;
+            // Horizontal input
+            let inputX = 0;
             if (this.cursors.left.isDown || this.keys.a.isDown) {
-              mx = -1;
+              inputX = -1;
               this.facingRight = false;
               this.player.setFlipX(true);
             } else if (this.cursors.right.isDown || this.keys.d.isDown) {
-              mx = 1;
+              inputX = 1;
               this.facingRight = true;
               this.player.setFlipX(false);
             }
-            this.player.setVelocityX(mx * stats.speed);
-            if (
-              onLadder &&
-              (this.cursors.up.isDown ||
-                this.keys.w.isDown ||
-                this.cursors.down.isDown ||
-                this.keys.s.isDown)
-            ) {
-              this.player.body.setAllowGravity(false);
-              if (this.cursors.up.isDown || this.keys.w.isDown)
-                this.player.setVelocityY(-120);
-              else if (this.cursors.down.isDown || this.keys.s.isDown)
-                this.player.setVelocityY(120);
-              else this.player.setVelocityY(0);
-            } else this.player.body.setAllowGravity(true);
-            if (onFloor) this.extraJumps = stats.doubleJump ? 1 : 0;
-            let jumpJust =
-              Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
-              Phaser.Input.Keyboard.JustDown(this.keys.w);
-            if (jumpJust && !onLadder) {
-              if (onFloor) this.player.setVelocityY(JUMP_VEL);
-              else if (this.extraJumps > 0) {
-                this.player.setVelocityY(JUMP_VEL * 0.85);
-                this.extraJumps--;
-                for (let i = 0; i < 4; i++) {
-                  let p = this.add
-                    .circle(
-                      this.player.x + Phaser.Math.Between(-8, 8),
-                      this.player.y + 14,
-                      2,
-                      0xaaaaff,
-                      0.6,
-                    )
-                    .setDepth(8);
-                  this.tweens.add({
-                    targets: p,
-                    alpha: 0,
-                    y: p.y + 15,
-                    duration: 300,
-                    onComplete: () => p.destroy(),
-                  });
+
+            let targetVx = inputX * stats.speed;
+
+            // === ICE FRICTION: lerp velocity instead of snapping ===
+            if (wasIce && onFloor) {
+              // Low friction: slow acceleration/deceleration
+              let lerpSpeed = inputX === 0 ? 0.02 : 0.04; // very slippery
+              this.playerVx = Phaser.Math.Linear(
+                this.playerVx,
+                targetVx,
+                lerpSpeed,
+              );
+              this.player.setVelocityX(this.playerVx);
+              this.player.body.setDragX(0);
+            } else {
+              // Normal ground: responsive control
+              this.player.body.setDragX(inputX === 0 ? 1200 : 0);
+              if (inputX !== 0) this.player.setVelocityX(targetVx);
+              this.playerVx = this.player.body.velocity.x;
+            }
+
+            // === LADDER MOVEMENT ===
+            if (onLadder) {
+              let climbUp = this.cursors.up.isDown || this.keys.w.isDown;
+              let climbDown = this.cursors.down.isDown || this.keys.s.isDown;
+              if (climbUp || climbDown) {
+                this.player.body.setAllowGravity(false);
+                this.player.setVelocityY(climbUp ? -130 : 130);
+              } else if (!onFloor) {
+                this.player.body.setAllowGravity(false);
+                this.player.setVelocityY(0);
+              } else {
+                this.player.body.setAllowGravity(true);
+              }
+              // === JUMP FROM LADDER ===
+              if (jumpPressed) {
+                this.player.body.setAllowGravity(true);
+                this.performJump();
+              }
+            } else {
+              this.player.body.setAllowGravity(true);
+              // === JUMPING with coyote time + jump buffer ===
+              if (hasBufferedJump && !onLadder) {
+                if (onFloor || canCoyoteJump) {
+                  this.performJump();
+                } else if (this.extraJumps > 0) {
+                  this.player.setVelocityY(JUMP_VEL * 0.85);
+                  this.extraJumps--;
+                  this.jumpBufferTimer = JUMP_BUFFER + 1;
+                  for (let i = 0; i < 4; i++) {
+                    let p = this.add
+                      .circle(
+                        this.player.x + Phaser.Math.Between(-8, 8),
+                        this.player.y + 14,
+                        2,
+                        0xaaaaff,
+                        0.6,
+                      )
+                      .setDepth(8);
+                    this.tweens.add({
+                      targets: p,
+                      alpha: 0,
+                      y: p.y + 15,
+                      duration: 300,
+                      onComplete: () => p.destroy(),
+                    });
+                  }
+                }
+              }
+              // === VARIABLE JUMP HEIGHT: cut jump short if button released ===
+              if (!onFloor && this.player.body.velocity.y < -100) {
+                if (!(this.cursors.up.isDown || this.keys.w.isDown)) {
+                  this.player.setVelocityY(this.player.body.velocity.y * 0.85);
                 }
               }
             }
-            if (mx !== 0 && onFloor) {
+
+            // === ANIMATION ===
+            if (inputX !== 0 && onFloor) {
               this.walkTimer += dt;
-              if (this.walkTimer > 0.15) {
+              if (this.walkTimer > 0.12) {
                 this.walkTimer = 0;
                 this.walkFrame = 1 - this.walkFrame;
               }
@@ -2798,7 +3386,24 @@
               this.walkTimer = 0;
               this.walkFrame = 0;
             }
+
+            // === LANDING SQUASH ===
+            if (
+              onFloor &&
+              !this.wasOnFloor &&
+              this.player.body.velocity.y >= 0
+            ) {
+              this.tweens.add({
+                targets: this.player,
+                scaleX: 1.2,
+                scaleY: 0.85,
+                duration: 60,
+                yoyo: true,
+              });
+            }
+            this.wasOnFloor = onFloor;
           }
+
           if (
             Phaser.Input.Keyboard.JustDown(this.keys.z) ||
             Phaser.Input.Keyboard.JustDown(this.keys.j)
@@ -2817,9 +3422,11 @@
             this.useConsumable(2);
           if (Phaser.Input.Keyboard.JustDown(this.keys.four))
             this.useConsumable(3);
+
           if (this.shieldSprite && PD.shieldHits > 0)
             this.shieldSprite.setPosition(this.player.x, this.player.y);
           this.enemies.children.each((e) => this.updateEnemyAI(e, dt));
+
           let hpRatio = Math.max(0, PD.hp / stats.maxHp);
           this.hpBarFill.width = 200 * hpRatio;
           this.hpBarFill.fillColor =
@@ -3256,11 +3863,10 @@
         }
       }
 
-      // Load persistent stats on boot
       try {
-        let raw = localStorage.getItem(SAVE_KEY);
-        if (raw) {
-          let d = JSON.parse(raw);
+        let r = localStorage.getItem(SAVE_KEY);
+        if (r) {
+          let d = JSON.parse(r);
           if (d) {
             PD.bestFloor = d.bestFloor || 0;
             PD.totalRuns = d.totalRuns || 0;
