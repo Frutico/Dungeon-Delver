@@ -33,11 +33,12 @@
       const WORLD_W = COLS * TW,
         WORLD_H = ROWS * TH;
       const GRAVITY = 900,
-        JUMP_VEL = -400,
+        JUMP_VEL = -450,
         MOVE_SPD = 160,
         DASH_SPD = 400,
         DASH_DUR = 0.18,
         DASH_CD = 0.8;
+      const SAVE_KEY = "dungeon_delver_save_v2";
       const RARITIES = {
         common: "#aaaaaa",
         uncommon: "#55ff55",
@@ -590,6 +591,7 @@
         if (f % 5 === 0 && f > 20) return "void_emperor";
         return null;
       }
+
       const PD = {
         level: 1,
         xp: 0,
@@ -612,6 +614,8 @@
         phoenixUsed: false,
         kills: 0,
         totalGold: 0,
+        bestFloor: 0,
+        totalRuns: 0,
         reset() {
           this.level = 1;
           this.xp = 0;
@@ -634,8 +638,129 @@
           this.phoenixUsed = false;
           this.kills = 0;
           this.totalGold = 0;
+          this.totalRuns++;
         },
       };
+
+      // ==================== SAVE / LOAD ====================
+      function saveGame() {
+        try {
+          let data = {
+            level: PD.level,
+            xp: PD.xp,
+            xpToNext: PD.xpToNext,
+            floor: PD.floor,
+            gold: PD.gold,
+            hp: PD.hp,
+            maxHp: PD.maxHp,
+            baseAttack: PD.baseAttack,
+            baseDefense: PD.baseDefense,
+            baseSpeed: PD.baseSpeed,
+            baseCrit: PD.baseCrit,
+            equipment: {},
+            inventory: [],
+            consumables: [],
+            talents: { ...PD.talents },
+            talentPoints: PD.talentPoints,
+            shieldHits: PD.shieldHits,
+            kills: PD.kills,
+            totalGold: PD.totalGold,
+            bestFloor: PD.bestFloor,
+            totalRuns: PD.totalRuns,
+            timestamp: Date.now(),
+          };
+          for (let slot in PD.equipment) {
+            data.equipment[slot] = PD.equipment[slot]
+              ? { ...PD.equipment[slot] }
+              : null;
+          }
+          data.inventory = PD.inventory.map((it) => ({ ...it }));
+          data.consumables = PD.consumables.map((c) => ({ ...c }));
+          localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+          return true;
+        } catch (e) {
+          console.error("Save failed:", e);
+          return false;
+        }
+      }
+
+      function loadGame() {
+        try {
+          let raw = localStorage.getItem(SAVE_KEY);
+          if (!raw) return false;
+          let data = JSON.parse(raw);
+          if (!data || !data.timestamp) return false;
+          PD.level = data.level || 1;
+          PD.xp = data.xp || 0;
+          PD.xpToNext = data.xpToNext || 100;
+          PD.floor = data.floor || 1;
+          PD.gold = data.gold || 0;
+          PD.hp = data.hp || 100;
+          PD.maxHp = data.maxHp || 100;
+          PD.baseAttack = data.baseAttack || 5;
+          PD.baseDefense = data.baseDefense || 2;
+          PD.baseSpeed = data.baseSpeed || MOVE_SPD;
+          PD.baseCrit = data.baseCrit || 5;
+          PD.talentPoints = data.talentPoints || 0;
+          PD.talents = data.talents || {};
+          PD.shieldHits = data.shieldHits || 0;
+          PD.kills = data.kills || 0;
+          PD.totalGold = data.totalGold || 0;
+          PD.bestFloor = data.bestFloor || 0;
+          PD.totalRuns = data.totalRuns || 0;
+          PD.tempBuffs = { atk: 0, spd: 0 };
+          PD.phoenixUsed = false;
+          for (let slot in data.equipment) {
+            PD.equipment[slot] = data.equipment[slot] || null;
+          }
+          PD.inventory = (data.inventory || []).map((it) => ({ ...it }));
+          PD.consumables = (data.consumables || []).map((c) => ({ ...c }));
+          return true;
+        } catch (e) {
+          console.error("Load failed:", e);
+          return false;
+        }
+      }
+
+      function hasSave() {
+        try {
+          let raw = localStorage.getItem(SAVE_KEY);
+          if (!raw) return false;
+          let data = JSON.parse(raw);
+          return data && data.timestamp && data.floor > 0;
+        } catch (e) {
+          return false;
+        }
+      }
+
+      function deleteSave() {
+        try {
+          localStorage.removeItem(SAVE_KEY);
+        } catch (e) {}
+      }
+
+      function getSaveInfo() {
+        try {
+          let raw = localStorage.getItem(SAVE_KEY);
+          if (!raw) return null;
+          let data = JSON.parse(raw);
+          if (!data) return null;
+          let age = Date.now() - data.timestamp;
+          let mins = Math.floor(age / 60000);
+          let timeStr =
+            mins < 60 ? mins + "m ago" : Math.floor(mins / 60) + "h ago";
+          return {
+            floor: data.floor,
+            level: data.level,
+            gold: data.gold,
+            time: timeStr,
+          };
+        } catch (e) {
+          return null;
+        }
+      }
+      // ==================== END SAVE/LOAD ====================
+
       function getTalentRank(id) {
         return PD.talents[id] || 0;
       }
@@ -721,17 +846,15 @@
         return labels;
       }
 
-      // ==================== LEVEL GENERATION SYSTEM ====================
+      // ==================== LEVEL GENERATION ====================
       function isSolid(v) {
         return v === 1 || v === 2 || v === 3 || v === 6;
       }
-
       function floodReachable(map, startR, startC) {
         let visited = new Set();
         let key = (r, c) => r * COLS + c;
         let queue = [key(startR, startC)];
         visited.add(key(startR, startC));
-
         let canPass = (r, c) => {
           if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return false;
           return !isSolid(map[r][c]);
@@ -753,12 +876,10 @@
             lr++;
           return lr;
         };
-
         while (queue.length > 0) {
           let k = queue.shift();
           let r = Math.floor(k / COLS),
             c = k % COLS;
-
           let tryAdd = (nr, nc) => {
             if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) return;
             let nk = key(nr, nc);
@@ -767,23 +888,17 @@
             visited.add(nk);
             queue.push(nk);
           };
-
-          // Ladder climbing
           if (map[r][c] === 5) {
             if (r > 0 && canPass(r - 1, c)) tryAdd(r - 1, c);
             if (r < ROWS - 1 && canPass(r + 1, c)) tryAdd(r + 1, c);
             tryAdd(r, c - 1);
             tryAdd(r, c + 1);
           }
-
           if (!canStandAt(r, c) && map[r][c] !== 5) {
-            // falling
             let lr = landingRow(r, c);
             if (lr !== r && canPass(lr, c)) tryAdd(lr, c);
             continue;
           }
-
-          // Walk left/right
           for (let dc of [-1, 1]) {
             let nc = c + dc;
             if (nc < 1 || nc >= COLS - 1) continue;
@@ -791,69 +906,50 @@
             let lr = landingRow(r, nc);
             tryAdd(lr, nc);
           }
-
-          // Jump: simulate arc
-          // At JUMP_VEL=-400, GRAVITY=900, max height ~3.5 tiles, hang time ~0.89s
-          // Horizontal speed=160, max horizontal ~5 tiles
-          // We check all reachable (dr,dc) within the jump envelope
           for (let dy = 0; dy <= 4; dy++) {
             let jumpR = r - dy;
             if (jumpR < 1) break;
-            // Check vertical path is clear
             let blocked = false;
-            for (let checkR = r - 1; checkR >= jumpR; checkR--) {
-              if (!canPass(checkR, c)) {
+            for (let cr = r - 1; cr >= jumpR; cr--) {
+              if (!canPass(cr, c)) {
                 blocked = true;
                 break;
               }
             }
             if (blocked) break;
-
-            // Horizontal reach increases with height, then decreases
-            // At peak (dy=3-4), max dx~5. At dy=0-1, max dx~2
             let maxDx;
             if (dy <= 1) maxDx = 2;
             else if (dy <= 2) maxDx = 4;
             else maxDx = 5;
-
             for (let dx = -maxDx; dx <= maxDx; dx++) {
               let nc = c + dx;
               if (nc < 1 || nc >= COLS - 1) continue;
               if (!canPass(jumpR, nc)) continue;
-
-              // Check horizontal path is roughly clear
-              let pathClear = true;
-              let stepC = c;
-              let stepDir = dx > 0 ? 1 : -1;
+              let pathClear = true,
+                stepC = c,
+                stepDir = dx > 0 ? 1 : -1;
               for (let s = 0; s < Math.abs(dx); s++) {
                 stepC += stepDir;
-                // Check at both current row and jump row
                 if (!canPass(r, stepC) && !canPass(jumpR, stepC)) {
                   pathClear = false;
                   break;
                 }
               }
               if (!pathClear) continue;
-
-              // Land: fall from (jumpR, nc) down
               let lr = landingRow(jumpR, nc);
               if (canPass(lr, nc)) tryAdd(lr, nc);
-              // Also add the jump point itself for ladder access
               tryAdd(jumpR, nc);
             }
           }
         }
         return visited;
       }
-
       function generateMapData() {
         let map = [];
         for (let r = 0; r < ROWS; r++) {
           map[r] = [];
           for (let c = 0; c < COLS; c++) map[r][c] = 0;
         }
-
-        // Solid borders
         for (let c = 0; c < COLS; c++) {
           map[0][c] = 2;
           map[ROWS - 1][c] = 1;
@@ -862,81 +958,56 @@
           map[r][0] = 2;
           map[r][COLS - 1] = 2;
         }
-
-        // Ground floor with small pits
         for (let c = 1; c < COLS - 1; c++) map[ROWS - 2][c] = 1;
         let pits = 1 + Math.floor(PD.floor / 5);
         for (let i = 0; i < pits; i++) {
-          let pw = 2 + Math.floor(Math.random() * 2);
-          let pc = 8 + Math.floor(Math.random() * (COLS - 16));
+          let pw = 2 + Math.floor(Math.random() * 2),
+            pc = 8 + Math.floor(Math.random() * (COLS - 16));
           for (let c = pc; c < pc + pw && c < COLS - 2; c++)
             map[ROWS - 2][c] = 0;
-          // put spikes at pit bottom? no, just leave empty
         }
-
-        // Build platform layers bottom to top
-        // Key constraint: step height 2-3 (jumpable), gap width 2-4 (jumpable)
-        let layerRows = [];
-        let y = ROWS - 5; // first layer 3 above ground
-
+        let layerRows = [],
+          y = ROWS - 5;
         while (y > 3) {
           layerRows.push(y);
-          let step = 2 + Math.floor(Math.random() * 2); // 2-3
-          y -= step;
+          y -= 2 + Math.floor(Math.random() * 2);
         }
-
-        // For each layer, place platform segments
-        let allSegments = []; // {r, c, w}
+        let allSegments = [];
         for (let ly of layerRows) {
           let c = 1 + Math.floor(Math.random() * 3);
           while (c < COLS - 3) {
             let pw = 3 + Math.floor(Math.random() * 6);
             if (c + pw > COLS - 2) pw = COLS - 2 - c;
             if (pw < 2) break;
-
-            // Slight height variation: 30% chance +-1
             let actualY = ly;
             if (Math.random() < 0.3) {
               let shift = Math.random() < 0.5 ? -1 : 1;
               let ny = ly + shift;
               if (ny > 2 && ny < ROWS - 3) actualY = ny;
             }
-
             for (let cc = c; cc < c + pw; cc++) {
               if (map[actualY][cc] === 0) map[actualY][cc] = 3;
             }
             allSegments.push({ r: actualY, c: c, w: pw });
-
-            let gap = 2 + Math.floor(Math.random() * 3);
-            c += pw + gap;
+            c += pw + 2 + Math.floor(Math.random() * 3);
           }
         }
-
-        // Add some terrain features: short walls, pillars
         let featureCount = 2 + Math.floor(Math.random() * 3);
         for (let i = 0; i < featureCount; i++) {
-          let fc = 5 + Math.floor(Math.random() * (COLS - 10));
-          let fr = 5 + Math.floor(Math.random() * (ROWS - 10));
-          let fh = 2 + Math.floor(Math.random() * 3);
+          let fc = 5 + Math.floor(Math.random() * (COLS - 10)),
+            fr = 5 + Math.floor(Math.random() * (ROWS - 10)),
+            fh = 2 + Math.floor(Math.random() * 3);
           for (let r = fr; r < fr + fh && r < ROWS - 2; r++) {
             if (map[r][fc] === 0) map[r][fc] = 1;
           }
         }
-
-        // Add ladders: connect each layer to the one below
-        // First, identify which segments on each layer are NOT reachable by jump from below
         for (let li = 0; li < layerRows.length; li++) {
           let layerR = layerRows[li];
           let belowR = li === 0 ? ROWS - 2 : layerRows[li - 1];
-          let heightDiff = belowR - layerR;
-
-          // Find segments on this layer
           let layerSegs = allSegments.filter(
             (s) => Math.abs(s.r - layerR) <= 1,
           );
-
           for (let seg of layerSegs) {
-            // Check if reachable by jump from any segment below
             let belowSegs =
               li === 0
                 ? [{ r: ROWS - 2, c: 1, w: COLS - 2 }]
@@ -945,21 +1016,19 @@
             for (let bs of belowSegs) {
               let hDiff = bs.r - seg.r;
               if (hDiff < 0 || hDiff > 4) continue;
-              let bLeft = bs.c,
-                bRight = bs.c + bs.w;
-              let sLeft = seg.c,
-                sRight = seg.c + seg.w;
+              let bL = bs.c,
+                bR = bs.c + bs.w,
+                sL = seg.c,
+                sR = seg.c + seg.w;
               let hDist = 0;
-              if (sRight <= bLeft) hDist = bLeft - sRight;
-              else if (sLeft >= bRight) hDist = sLeft - bRight;
+              if (sR <= bL) hDist = bL - sR;
+              else if (sL >= bR) hDist = sL - bR;
               if (hDist <= 5 && hDiff <= 3) {
                 reachable = true;
                 break;
               }
             }
-
             if (!reachable) {
-              // Add ladder
               let lc = seg.c + Math.floor(seg.w / 2);
               if (lc < 2) lc = 2;
               if (lc > COLS - 3) lc = COLS - 3;
@@ -970,20 +1039,13 @@
             }
           }
         }
-
-        // Add extra ladders/ropes for variety
         let extraLadders = 2 + Math.floor(Math.random() * 3);
         for (let i = 0; i < extraLadders; i++) {
           let lc = 3 + Math.floor(Math.random() * (COLS - 6));
-          // Find a platform in this column
           for (let r = 3; r < ROWS - 4; r++) {
             if (map[r][lc] === 3 && map[r + 1][lc] === 0) {
-              let ropeLen = 3 + Math.floor(Math.random() * 5);
-              for (
-                let rr = r + 1;
-                rr < r + 1 + ropeLen && rr < ROWS - 2;
-                rr++
-              ) {
+              let len = 3 + Math.floor(Math.random() * 5);
+              for (let rr = r + 1; rr < r + 1 + len && rr < ROWS - 2; rr++) {
                 if (map[rr][lc] === 0) map[rr][lc] = 5;
                 else break;
               }
@@ -991,23 +1053,19 @@
             }
           }
         }
-
-        // Ground-to-first-layer ladders
         let groundLadders = 2 + Math.floor(Math.random() * 2);
         for (let i = 0; i < groundLadders; i++) {
           let lc = 4 + Math.floor(Math.random() * (COLS - 8));
           if (layerRows.length > 0) {
-            let targetR = layerRows[0];
-            for (let r = targetR; r < ROWS - 2; r++) {
+            let tR = layerRows[0];
+            for (let r = tR; r < ROWS - 2; r++) {
               if (map[r][lc] === 0) map[r][lc] = 5;
               else if (isSolid(map[r][lc])) break;
             }
           }
         }
-
-        // Add spikes
         let spkCh = 0.01 + PD.floor * 0.004;
-        for (let r = 2; r < ROWS - 2; r++) {
+        for (let r = 2; r < ROWS - 2; r++)
           for (let c = 3; c < COLS - 3; c++) {
             if (
               isSolid(map[r][c]) &&
@@ -1019,13 +1077,9 @@
               map[r - 1][c] = 4;
             }
           }
-        }
-
         return map;
       }
-
       function validateLevel(map) {
-        // Find player start: ground level, left side, clear space
         let playerC = 3,
           playerR = -1;
         for (let r = 1; r < ROWS; r++) {
@@ -1035,9 +1089,7 @@
           }
         }
         if (playerR === -1) return null;
-
-        // Clear player spawn area
-        for (let r = Math.max(1, playerR - 2); r <= playerR; r++) {
+        for (let r = Math.max(1, playerR - 2); r <= playerR; r++)
           for (
             let c = Math.max(1, playerC - 1);
             c <= Math.min(COLS - 2, playerC + 1);
@@ -1045,10 +1097,7 @@
           ) {
             if (map[r][c] !== 5) map[r][c] = 0;
           }
-        }
         if (!isSolid(map[playerR + 1][playerC])) map[playerR + 1][playerC] = 1;
-
-        // Find exit: prefer high platform on right side
         let exitR = -1,
           exitC = -1;
         for (let r = 3; r < ROWS - 3; r++) {
@@ -1075,17 +1124,11 @@
           }
         }
         if (exitR === -1) return null;
-
-        // Clear exit area
         map[exitR][exitC] = 0;
         if (exitR > 1) map[exitR - 1][exitC] = 0;
-
-        // Check reachability
         let reachable = floodReachable(map, playerR, playerC);
         let exitKey = exitR * COLS + exitC;
-
         if (!reachable.has(exitKey)) {
-          // Try fix: add ladder from exit down to reachable area
           let fixed = false;
           for (let r = exitR; r < ROWS - 1; r++) {
             if (reachable.has(r * COLS + exitC)) {
@@ -1096,18 +1139,15 @@
               break;
             }
           }
-          if (!fixed) {
-            // Try multiple columns near exit
+          if (!fixed)
             for (let dc = -3; dc <= 3 && !fixed; dc++) {
               let tc = exitC + dc;
               if (tc < 2 || tc >= COLS - 2) continue;
               for (let r = exitR; r < ROWS - 1; r++) {
                 if (reachable.has(r * COLS + tc)) {
-                  // Ladder at tc from exitR to r
                   for (let rr = exitR; rr <= r; rr++) {
                     if (map[rr][tc] === 0) map[rr][tc] = 5;
                   }
-                  // Also horizontal connection at exitR
                   let minC = Math.min(tc, exitC),
                     maxC = Math.max(tc, exitC);
                   for (let cc = minC; cc <= maxC; cc++) {
@@ -1119,23 +1159,18 @@
                 }
               }
             }
-          }
-          if (!fixed) {
+          if (!fixed)
             for (let r = exitR; r < ROWS - 1; r++) {
               if (map[r][exitC] === 0) map[r][exitC] = 5;
               else if (isSolid(map[r][exitC])) break;
             }
-          }
-
           reachable = floodReachable(map, playerR, playerC);
           if (!reachable.has(exitKey)) return null;
         }
-
-        // Collect valid spots for enemies, items, coins, chests
         let enemySpots = [],
           itemSpots = [],
           coinSpots = [];
-        for (let r = 2; r < ROWS - 2; r++) {
+        for (let r = 2; r < ROWS - 2; r++)
           for (let c = 2; c < COLS - 2; c++) {
             if (!reachable.has(r * COLS + c)) continue;
             if (map[r][c] !== 0) continue;
@@ -1147,10 +1182,7 @@
             if (map[r - 1] && map[r - 1][c] === 0) itemSpots.push({ r, c });
             coinSpots.push({ r, c });
           }
-        }
-
         if (enemySpots.length < 3) return null;
-
         return {
           valid: true,
           playerR,
@@ -1163,7 +1195,6 @@
           reachable,
         };
       }
-
       function generateFallbackMap() {
         let map = [];
         for (let r = 0; r < ROWS; r++) {
@@ -1384,7 +1415,7 @@
           this.cameras.main.setBackgroundColor("#0a0a1a");
           this.add.image(400, 300, "parallax_stars").setAlpha(0.5);
           this.add
-            .text(400, 100, "DUNGEON DELVER", {
+            .text(400, 80, "DUNGEON DELVER", {
               fontSize: "48px",
               fill: "#ffdd44",
               fontFamily: "monospace",
@@ -1394,37 +1425,112 @@
             })
             .setOrigin(0.5);
           this.add
-            .text(400, 155, "Roguelike Platformer", {
+            .text(400, 135, "Roguelike Platformer", {
               fontSize: "16px",
               fill: "#aaaacc",
               fontFamily: "monospace",
             })
             .setOrigin(0.5);
-          let start = this.add
-            .text(400, 260, "[ START GAME ]", {
-              fontSize: "28px",
+
+          let btnY = 220;
+          let newGame = this.add
+            .text(400, btnY, "[ NEW GAME ]", {
+              fontSize: "24px",
               fill: "#55ff55",
               fontFamily: "monospace",
             })
             .setOrigin(0.5)
             .setInteractive({ useHandCursor: true });
-          start.on("pointerover", () => start.setFill("#88ff88"));
-          start.on("pointerout", () => start.setFill("#55ff55"));
-          start.on("pointerdown", () => {
+          newGame.on("pointerover", () => newGame.setFill("#88ff88"));
+          newGame.on("pointerout", () => newGame.setFill("#55ff55"));
+          newGame.on("pointerdown", () => {
             PD.reset();
+            PD.totalRuns++;
+            saveGame();
             this.scene.start("GameScene");
           });
-          [
+
+          if (hasSave()) {
+            let info = getSaveInfo();
+            let contBtn = this.add
+              .text(400, btnY + 45, "[ CONTINUE ]", {
+                fontSize: "24px",
+                fill: "#44aaff",
+                fontFamily: "monospace",
+              })
+              .setOrigin(0.5)
+              .setInteractive({ useHandCursor: true });
+            contBtn.on("pointerover", () => contBtn.setFill("#88ccff"));
+            contBtn.on("pointerout", () => contBtn.setFill("#44aaff"));
+            contBtn.on("pointerdown", () => {
+              loadGame();
+              this.scene.start("GameScene");
+            });
+            if (info) {
+              this.add
+                .text(
+                  400,
+                  btnY + 75,
+                  "Floor " +
+                    info.floor +
+                    " | Lv." +
+                    info.level +
+                    " | " +
+                    info.gold +
+                    "g | " +
+                    info.time,
+                  {
+                    fontSize: "11px",
+                    fill: "#7799bb",
+                    fontFamily: "monospace",
+                  },
+                )
+                .setOrigin(0.5);
+            }
+
+            let delBtn = this.add
+              .text(400, btnY + 100, "[ DELETE SAVE ]", {
+                fontSize: "14px",
+                fill: "#ff6666",
+                fontFamily: "monospace",
+              })
+              .setOrigin(0.5)
+              .setInteractive({ useHandCursor: true });
+            delBtn.on("pointerover", () => delBtn.setFill("#ff9999"));
+            delBtn.on("pointerout", () => delBtn.setFill("#ff6666"));
+            delBtn.on("pointerdown", () => {
+              deleteSave();
+              this.scene.restart();
+            });
+            btnY += 120;
+          } else {
+            btnY += 50;
+          }
+
+          if (PD.bestFloor > 0) {
+            this.add
+              .text(
+                400,
+                btnY + 10,
+                "Best: Floor " + PD.bestFloor + " | Runs: " + PD.totalRuns,
+                { fontSize: "12px", fill: "#888", fontFamily: "monospace" },
+              )
+              .setOrigin(0.5);
+            btnY += 30;
+          }
+
+          let controls = [
             "Arrows/WASD: Move & Jump",
             "Z/J: Attack   X/K: Dash",
             "1-4: Consumables",
             "Collect equipment sets!",
             "Boss every 5 floors!",
-          ].forEach((t, i) =>
+          ];
+          controls.forEach((t, i) =>
             this.add
-              .text(400, 370 + i * 22, t, {
-                fontSize: "13px",
-                fill: "#7777aa",
+              .text(400, btnY + 30 + i * 20, t, {
+                fontSize: "12px",
+                fill: "#6666aa",
                 fontFamily: "monospace",
               })
               .setOrigin(0.5),
@@ -1436,7 +1542,6 @@
         constructor() {
           super("GameScene");
         }
-
         create() {
           this.gameOver = false;
           this.attackTimer = 0;
@@ -1471,8 +1576,6 @@
           this.spikes = this.physics.add.staticGroup();
           this.ladders = this.physics.add.staticGroup();
           this.breakables = this.physics.add.staticGroup();
-
-          // Generate and validate level
           let levelData = null;
           for (let attempt = 0; attempt < 50; attempt++) {
             this.platforms.clear(true, true);
@@ -1492,18 +1595,14 @@
             this.ladders.clear(true, true);
             this.breakables.clear(true, true);
             let map = generateFallbackMap();
-            let playerR = ROWS - 3,
-              playerC = 3,
-              exitR = ROWS - 3,
-              exitC = COLS - 5;
             levelData = {
               map,
               v: {
                 valid: true,
-                playerR,
-                playerC,
-                exitR,
-                exitC,
+                playerR: ROWS - 3,
+                playerC: 3,
+                exitR: ROWS - 3,
+                exitC: COLS - 5,
                 enemySpots: [
                   { r: ROWS - 3, c: 20 },
                   { r: ROWS - 3, c: 30 },
@@ -1515,15 +1614,12 @@
               },
             };
           }
-
-          let map = levelData.map;
-          let v = levelData.v;
+          let map = levelData.map,
+            v = levelData.v;
           this.mapData = map;
           this.validEnemySpots = v.enemySpots;
           this.validItemSpots = v.itemSpots;
           this.validCoinSpots = v.coinSpots;
-
-          // Add breakables at valid item spots
           let bc2 = 2 + Math.floor(PD.floor * 0.5);
           let breakSpots = [...this.validItemSpots];
           Phaser.Utils.Array.Shuffle(breakSpots);
@@ -1531,10 +1627,8 @@
             let spot = breakSpots.pop();
             if (map[spot.r][spot.c] === 0) map[spot.r][spot.c] = 6;
           }
-
-          // Build tile sprites
           let bk = this.biomeKey;
-          for (let r = 0; r < ROWS; r++) {
+          for (let r = 0; r < ROWS; r++)
             for (let c = 0; c < COLS; c++) {
               let tx = c * TW + TW / 2,
                 ty = r * TH + TH / 2;
@@ -1567,22 +1661,17 @@
                 }
               }
             }
-          }
-
           this.platformRows = [];
-          for (let r = 2; r < ROWS - 2; r++) {
+          for (let r = 2; r < ROWS - 2; r++)
             for (let c = 1; c < COLS - 1; c++) {
               if (map[r][c] === 3) {
                 this.platformRows.push(r);
                 break;
               }
             }
-          }
-
           let stats = getStats();
           PD.maxHp = stats.maxHp;
           if (PD.hp > PD.maxHp) PD.hp = PD.maxHp;
-
           this.player = this.physics.add.sprite(
             v.playerC * TW + TW / 2,
             v.playerR * TH + TH / 2,
@@ -1592,7 +1681,6 @@
           this.player.body.setSize(16, 24);
           this.player.body.setOffset(8, 8);
           this.player.setDepth(10);
-
           this.exit = this.physics.add.sprite(
             v.exitC * TW + TW / 2,
             v.exitR * TH + TH / 2,
@@ -1601,24 +1689,20 @@
           this.exit.body.setAllowGravity(false);
           this.exit.body.setImmovable(true);
           this.exit.setDepth(5);
-
           this.enemies = this.physics.add.group();
           if (this.isBossFloor) this.spawnBoss();
           else this.spawnEnemies();
-
           this.coins = this.physics.add.group();
           this.chests = this.physics.add.staticGroup();
           this.itemDrops = this.physics.add.group();
           this.projectiles = this.physics.add.group();
           this.spawnPickups();
-
           this.shieldSprite = null;
           if (PD.shieldHits > 0)
             this.shieldSprite = this.add
               .image(0, 0, "shield_fx")
               .setAlpha(0.4)
               .setDepth(11);
-
           this.physics.add.collider(this.player, this.platforms);
           this.physics.add.collider(this.player, this.breakables);
           this.physics.add.collider(this.enemies, this.platforms);
@@ -1674,7 +1758,6 @@
             null,
             this,
           );
-
           this.cursors = this.input.keyboard.createCursorKeys();
           this.keys = this.input.keyboard.addKeys({
             w: "W",
@@ -1693,7 +1776,6 @@
           this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
           this.cameras.main.setDeadzone(60, 40);
           this.createHUD();
-
           let fn =
             biome.name +
             " - Floor " +
@@ -1719,6 +1801,8 @@
             onComplete: () => ft.destroy(),
           });
           this.cameras.main.fadeIn(400);
+          // autosave on floor start
+          saveGame();
         }
 
         spawnEnemies() {
@@ -1734,16 +1818,14 @@
           for (let i = 0; i < count && spots.length > 0; i++) {
             let spot = spots.pop();
             let type = types[Math.floor(Math.random() * types.length)];
-            let ed = ENEMY_DEFS[type];
             this.createEnemy(
               type,
-              ed,
+              ENEMY_DEFS[type],
               spot.c * TW + TW / 2,
               spot.r * TH + TH / 2,
             );
           }
         }
-
         createEnemy(type, ed, px, py) {
           let scale = 1 + PD.floor * 0.06;
           let e = this.enemies.create(px, py, type);
@@ -1770,20 +1852,19 @@
           }
           return e;
         }
-
         spawnBoss() {
           let bt = getBoss(PD.floor),
             bd = BOSS_DEFS[bt];
           let spots = [...this.validEnemySpots];
           Phaser.Utils.Array.Shuffle(spots);
-          let bossSpot =
+          let bs =
             spots.length > 0
               ? spots.pop()
               : { r: ROWS - 3, c: Math.floor(COLS / 2) };
           let scale = 1 + Math.max(0, PD.floor - 5) * 0.08;
           let e = this.enemies.create(
-            bossSpot.c * TW + TW / 2,
-            bossSpot.r * TH + TH / 2,
+            bs.c * TW + TW / 2,
+            bs.r * TH + TH / 2,
             bt,
           );
           e.etype = bt;
@@ -1803,9 +1884,9 @@
           e.aggroed = true;
           e.aggroRange = 400;
           e.body.setSize(bd.w - 4, bd.h - 4);
-          let addCount = 2 + Math.floor(PD.floor / 10);
+          let ac = 2 + Math.floor(PD.floor / 10);
           let types = Object.keys(ENEMY_DEFS);
-          for (let i = 0; i < addCount && spots.length > 0; i++) {
+          for (let i = 0; i < ac && spots.length > 0; i++) {
             let spot = spots.pop();
             let t = types[Math.floor(Math.random() * types.length)];
             this.createEnemy(
@@ -1816,16 +1897,15 @@
             );
           }
         }
-
         spawnPickups() {
-          let coinSpots = [...(this.validCoinSpots || this.validEnemySpots)];
-          Phaser.Utils.Array.Shuffle(coinSpots);
-          let cc = Math.min(10 + PD.floor * 2, coinSpots.length);
+          let cs = [...(this.validCoinSpots || this.validEnemySpots)];
+          Phaser.Utils.Array.Shuffle(cs);
+          let cc = Math.min(10 + PD.floor * 2, cs.length);
           for (let i = 0; i < cc; i++) {
-            let spot = coinSpots[i];
+            let s = cs[i];
             let c = this.coins.create(
-              spot.c * TW + TW / 2,
-              spot.r * TH + TH / 2,
+              s.c * TW + TW / 2,
+              s.r * TH + TH / 2,
               "coin",
             );
             c.body.setSize(12, 12);
@@ -1833,20 +1913,19 @@
             c.goldValue =
               1 + Math.floor(Math.random() * 3) + Math.floor(PD.floor / 2);
           }
-          let chestSpots = [...(this.validItemSpots || [])];
-          Phaser.Utils.Array.Shuffle(chestSpots);
-          let chc = Math.min(1 + Math.floor(PD.floor / 3), chestSpots.length);
+          let chS = [...(this.validItemSpots || [])];
+          Phaser.Utils.Array.Shuffle(chS);
+          let chc = Math.min(1 + Math.floor(PD.floor / 3), chS.length);
           for (let i = 0; i < chc; i++) {
-            let spot = chestSpots[i];
+            let s = chS[i];
             let ch = this.chests.create(
-              spot.c * TW + TW / 2,
-              spot.r * TH + TH / 2 - 4,
+              s.c * TW + TW / 2,
+              s.r * TH + TH / 2 - 4,
               "chest",
             );
             ch.opened = false;
           }
         }
-
         createHUD() {
           this.add
             .rectangle(120, 20, 204, 18, 0x000000, 0.5)
@@ -1921,7 +2000,6 @@
             .setScrollFactor(0)
             .setDepth(51);
         }
-
         floatText(x, y, text, color = "#fff", size = "14px") {
           let t = this.add
             .text(x, y, text, {
@@ -1942,7 +2020,6 @@
             onComplete: () => t.destroy(),
           });
         }
-
         hitSpike(player) {
           if (this.invTimer > 0 || this.gameOver) return;
           this.takeDamage(10 + PD.floor * 2);
@@ -1953,7 +2030,6 @@
           this.takeDamage(proj.damage || 5);
           proj.destroy();
         }
-
         hitEnemy(player, enemy) {
           if (this.invTimer > 0 || this.gameOver || !enemy.active) return;
           if (this.dashTimer > 0) {
@@ -1978,7 +2054,6 @@
           player.setVelocityX(kb);
           player.setVelocityY(-200);
         }
-
         takeDamage(dmg) {
           PD.hp -= dmg;
           this.floatText(
@@ -2021,19 +2096,20 @@
             this.doGameOver();
           }
         }
-
         doGameOver() {
           this.gameOver = true;
           this.player.setTint(0xff0000);
           this.player.setVelocityY(-300);
           this.player.body.setAllowGravity(false);
+          if (PD.floor > PD.bestFloor) PD.bestFloor = PD.floor;
+          saveGame();
           this.time.delayedCall(800, () => {
             this.add
               .rectangle(400, 300, 800, 600, 0x000000, 0.75)
               .setScrollFactor(0)
               .setDepth(90);
             this.add
-              .text(400, 200, "GAME OVER", {
+              .text(400, 180, "GAME OVER", {
                 fontSize: "48px",
                 fill: "#ff2222",
                 fontFamily: "monospace",
@@ -2047,16 +2123,26 @@
             this.add
               .text(
                 400,
-                270,
+                240,
                 "Floor:" + PD.floor + " Lv:" + PD.level + " Kills:" + PD.kills,
                 { fontSize: "16px", fill: "#ccc", fontFamily: "monospace" },
               )
               .setOrigin(0.5)
               .setScrollFactor(0)
               .setDepth(91);
+            this.add
+              .text(
+                400,
+                265,
+                "Gold Earned:" + PD.totalGold + " Best Floor:" + PD.bestFloor,
+                { fontSize: "13px", fill: "#ffdd44", fontFamily: "monospace" },
+              )
+              .setOrigin(0.5)
+              .setScrollFactor(0)
+              .setDepth(91);
             let retry = this.add
-              .text(400, 350, "[ RETRY ]", {
-                fontSize: "28px",
+              .text(400, 320, "[ NEW RUN ]", {
+                fontSize: "24px",
                 fill: "#55ff55",
                 fontFamily: "monospace",
               })
@@ -2066,11 +2152,27 @@
               .setInteractive({ useHandCursor: true });
             retry.on("pointerdown", () => {
               PD.reset();
+              PD.totalRuns++;
+              deleteSave();
+              saveGame();
+              this.scene.start("MenuScene");
+            });
+            let menu = this.add
+              .text(400, 360, "[ MAIN MENU ]", {
+                fontSize: "18px",
+                fill: "#aaaaff",
+                fontFamily: "monospace",
+              })
+              .setOrigin(0.5)
+              .setScrollFactor(0)
+              .setDepth(91)
+              .setInteractive({ useHandCursor: true });
+            menu.on("pointerdown", () => {
+              deleteSave();
               this.scene.start("MenuScene");
             });
           });
         }
-
         collectCoin(p, coin) {
           let stats = getStats();
           let v =
@@ -2112,7 +2214,6 @@
           );
           item.destroy();
         }
-
         dropItem(x, y) {
           let avail = ITEMS.filter((it) => it.minFloor <= PD.floor + 2);
           if (!avail.length) return;
@@ -2144,7 +2245,6 @@
           if (PD.consumables.length > 8) PD.consumables.length = 8;
           this.floatText(x, y - 10, ch.name, "#88ffaa", "11px");
         }
-
         useConsumable(idx) {
           if (idx >= PD.consumables.length || this.gameOver) return;
           let con = PD.consumables[idx],
@@ -2241,7 +2341,6 @@
           this.floatText(x, y, "+" + g + "g", "#ffdd00", "12px");
           if (Math.random() < 0.2) this.dropConsumable(x, y);
         }
-
         reachExit() {
           if (this.gameOver) return;
           if (this.isBossFloor) {
@@ -2263,10 +2362,11 @@
             }
           }
           this.gameOver = true;
+          if (PD.floor > PD.bestFloor) PD.bestFloor = PD.floor;
+          saveGame();
           this.cameras.main.fade(500);
           this.time.delayedCall(500, () => this.scene.start("ShopScene"));
         }
-
         doAttack() {
           if (this.attackTimer > 0 || this.gameOver) return;
           this.attackTimer = 0.35;
@@ -2330,7 +2430,6 @@
             },
           });
         }
-
         doDash() {
           if (this.dashCooldown > 0 || this.dashTimer > 0 || this.gameOver)
             return;
@@ -2357,7 +2456,6 @@
             });
           }
         }
-
         damageEnemy(enemy, dmg, crit = false) {
           enemy.ehp -= dmg;
           enemy.hitFlash = 0.15;
@@ -2370,7 +2468,6 @@
           );
           if (enemy.ehp <= 0) this.killEnemy(enemy);
         }
-
         killEnemy(enemy) {
           let stats = getStats();
           let goldAmt =
@@ -2450,7 +2547,6 @@
           });
           enemy.destroy();
         }
-
         updateEnemyAI(e, dt) {
           if (!e.active) return;
           if (e.hitFlash > 0) {
@@ -2462,7 +2558,6 @@
             dy = this.player.y - e.y,
             dist = Math.sqrt(dx * dx + dy * dy);
           let type = e.etype;
-
           if (!e.aggroed && dist < e.aggroRange) {
             e.aggroed = true;
             this.enemies.children.each((o) => {
@@ -2474,14 +2569,13 @@
                 o.aggroed = true;
             });
           }
-
           if (type === "bat" || type === "ghost") {
             e.wavt = (e.wavt || 0) + dt * 3;
             if (e.aggroed) {
               e.setVelocityX(Math.sign(dx) * e.espeed * 1.3);
               e.setVelocityY((this.player.y - e.y) * 2);
             } else {
-              let targetY = (e.baseY || e.y) + Math.sin(e.wavt) * 35;
+              let tY = (e.baseY || e.y) + Math.sin(e.wavt) * 35;
               e.dir = e.dir || 1;
               e.moveTimer += dt;
               if (e.moveTimer > 2) {
@@ -2489,18 +2583,16 @@
                 e.dir *= -1;
               }
               e.setVelocityX(e.dir * e.espeed * 0.3);
-              e.setVelocityY((targetY - e.y) * 2);
+              e.setVelocityY((tY - e.y) * 2);
             }
             if (type === "ghost") e.setAlpha(0.5 + Math.sin(e.wavt) * 0.3);
           } else if (e.aggroed) {
-            let chaseSpd = e.espeed * (type === "golem" ? 0.8 : 1.2);
+            let cs = e.espeed * (type === "golem" ? 0.8 : 1.2);
             if (dist < 300) {
-              e.setVelocityX(Math.sign(dx) * chaseSpd);
+              e.setVelocityX(Math.sign(dx) * cs);
               if (dy < -40 && e.body.blocked.down && Math.abs(dx) < 150)
                 e.setVelocityY(-300);
-            } else {
-              e.setVelocityX(Math.sign(dx) * e.espeed * 0.5);
-            }
+            } else e.setVelocityX(Math.sign(dx) * e.espeed * 0.5);
             if (BOSS_DEFS[type] && e.attackCd <= 0 && dist < 300) {
               e.attackCd = 1.5;
               let proj = this.projectiles.create(e.x, e.y - 5, "coin");
@@ -2535,7 +2627,6 @@
             if (e.body.blocked.right) e.dir = -1;
           }
           e.setFlipX(e.body.velocity.x < 0);
-
           if (!e.hpBarBg) {
             let bw = e.isBoss ? 60 : 26;
             e.hpBarBg = this.add
@@ -2625,7 +2716,6 @@
               });
             }
           }
-
           let onFloor = this.player.body.blocked.down;
           let onLadder = false;
           this.ladders.children.each((l) => {
@@ -2638,7 +2728,6 @@
             )
               onLadder = true;
           });
-
           if (this.dashTimer <= 0) {
             let mx = 0;
             if (this.cursors.left.isDown || this.keys.a.isDown) {
@@ -2651,7 +2740,6 @@
               this.player.setFlipX(false);
             }
             this.player.setVelocityX(mx * stats.speed);
-
             if (
               onLadder &&
               (this.cursors.up.isDown ||
@@ -2665,10 +2753,7 @@
               else if (this.cursors.down.isDown || this.keys.s.isDown)
                 this.player.setVelocityY(120);
               else this.player.setVelocityY(0);
-            } else {
-              this.player.body.setAllowGravity(true);
-            }
-
+            } else this.player.body.setAllowGravity(true);
             if (onFloor) this.extraJumps = stats.doubleJump ? 1 : 0;
             let jumpJust =
               Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
@@ -2714,7 +2799,6 @@
               this.walkFrame = 0;
             }
           }
-
           if (
             Phaser.Input.Keyboard.JustDown(this.keys.z) ||
             Phaser.Input.Keyboard.JustDown(this.keys.j)
@@ -2733,12 +2817,10 @@
             this.useConsumable(2);
           if (Phaser.Input.Keyboard.JustDown(this.keys.four))
             this.useConsumable(3);
-
           if (this.shieldSprite && PD.shieldHits > 0)
             this.shieldSprite.setPosition(this.player.x, this.player.y);
           this.enemies.children.each((e) => this.updateEnemyAI(e, dt));
-
-          let hpRatio = Math.max(0, PD.hp / getStats().maxHp);
+          let hpRatio = Math.max(0, PD.hp / stats.maxHp);
           this.hpBarFill.width = 200 * hpRatio;
           this.hpBarFill.fillColor =
             hpRatio > 0.5 ? 0x44cc44 : hpRatio > 0.25 ? 0xcccc44 : 0xcc4444;
@@ -2794,6 +2876,7 @@
           PD.tempBuffs = { atk: 0, spd: 0 };
           let stats = getStats();
           PD.hp = Math.min(stats.maxHp, PD.hp + Math.floor(stats.maxHp * 0.3));
+          if (PD.floor > PD.bestFloor) PD.bestFloor = PD.floor;
           this.cameras.main.setBackgroundColor("#0a0a15");
           this.add.image(400, 300, "parallax_stars").setAlpha(0.3);
           let biome = getBiome(PD.floor);
@@ -2814,6 +2897,7 @@
               PD.inventory.splice(i, 1);
             }
           }
+          saveGame();
           this.refreshUI();
         }
         refreshUI() {
@@ -3032,6 +3116,7 @@
                 if (PD.gold >= it.cost) {
                   PD.gold -= it.cost;
                   PD.inventory.push({ ...it });
+                  saveGame();
                   this.refreshUI();
                 }
               });
@@ -3072,6 +3157,7 @@
                 if (PD.gold >= con.cost && PD.consumables.length < 8) {
                   PD.gold -= con.cost;
                   PD.consumables.push({ ...con });
+                  saveGame();
                   this.refreshUI();
                 }
               });
@@ -3093,6 +3179,7 @@
               if (PD.gold >= healCost) {
                 PD.gold -= healCost;
                 PD.hp = stats.maxHp;
+                saveGame();
                 this.refreshUI();
               }
             });
@@ -3141,6 +3228,7 @@
                 PD.talents[tal.id] = (PD.talents[tal.id] || 0) + 1;
                 PD.talentPoints--;
                 PD.maxHp = getStats().maxHp;
+                saveGame();
                 this.refreshUI();
               });
               this.uiC.add(ub);
@@ -3160,10 +3248,25 @@
             .setInteractive({ useHandCursor: true });
           cont.on("pointerover", () => cont.setFill("#8f8"));
           cont.on("pointerout", () => cont.setFill("#4f4"));
-          cont.on("pointerdown", () => this.scene.start("GameScene"));
+          cont.on("pointerdown", () => {
+            saveGame();
+            this.scene.start("GameScene");
+          });
           this.uiC.add(cont);
         }
       }
+
+      // Load persistent stats on boot
+      try {
+        let raw = localStorage.getItem(SAVE_KEY);
+        if (raw) {
+          let d = JSON.parse(raw);
+          if (d) {
+            PD.bestFloor = d.bestFloor || 0;
+            PD.totalRuns = d.totalRuns || 0;
+          }
+        }
+      } catch (e) {}
 
       new Phaser.Game({
         type: Phaser.AUTO,
