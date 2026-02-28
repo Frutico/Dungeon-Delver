@@ -29,6 +29,13 @@ class ShopScene extends Phaser.Scene {
         PD.inventory.splice(i, 1);
       }
     }
+    // Generate shop stock once per visit — never reshuffle on buy/sell/talent
+    this.shopItems = Phaser.Utils.Array.Shuffle([
+      ...ITEMS.filter((it) => it.minFloor <= PD.floor + 3 && !it.noShop),
+    ]).slice(0, 5);
+    this.shopConsumables = Phaser.Utils.Array.Shuffle([
+      ...CONSUMABLES.filter((c) => !c.minFloor || c.minFloor <= PD.floor),
+    ]).slice(0, 4);
     saveGame();
     this.refreshUI();
   }
@@ -206,55 +213,52 @@ class ShopScene extends Phaser.Scene {
       }),
     );
     sy += 16;
-    Phaser.Utils.Array.Shuffle([
-      ...ITEMS.filter((it) => it.minFloor <= PD.floor + 3),
-    ])
-      .slice(0, 5)
-      .forEach((it) => {
-        let color = RARITIES[it.rarity] || "#aaa";
-        let ss = Object.entries(it.stats)
-          .map(([k, v]) => k + "+" + v)
-          .join(" ");
-        this.uiC.add(
-          this.add.text(28, sy, it.name, {
-            fontSize: "10px",
-            fill: color,
-            fontFamily: "monospace",
-          }),
-        );
-        this.uiC.add(
-          this.add.text(185, sy, ss, {
-            fontSize: "9px",
-            fill: "#777",
-            fontFamily: "monospace",
-          }),
-        );
-        this.uiC.add(
-          this.add.text(360, sy, "[" + it.set + "]", {
-            fontSize: "9px",
-            fill: "#556",
-            fontFamily: "monospace",
-          }),
-        );
-        let cc = PD.gold >= it.cost ? "#5f5" : "#f55";
-        let bb = this.add
-          .text(430, sy, "Buy:" + it.cost + "g", {
-            fontSize: "10px",
-            fill: cc,
-            fontFamily: "monospace",
-          })
-          .setInteractive({ useHandCursor: true });
-        bb.on("pointerdown", () => {
-          if (PD.gold >= it.cost) {
-            PD.gold -= it.cost;
-            PD.inventory.push({ ...it });
-            saveGame();
-            this.refreshUI();
-          }
-        });
-        this.uiC.add(bb);
-        sy += 14;
+    this.shopItems.forEach((it, idx) => {
+      let color = RARITIES[it.rarity] || "#aaa";
+      let ss = Object.entries(it.stats)
+        .map(([k, v]) => k + "+" + v)
+        .join(" ");
+      this.uiC.add(
+        this.add.text(28, sy, it.name, {
+          fontSize: "10px",
+          fill: color,
+          fontFamily: "monospace",
+        }),
+      );
+      this.uiC.add(
+        this.add.text(185, sy, ss, {
+          fontSize: "9px",
+          fill: "#777",
+          fontFamily: "monospace",
+        }),
+      );
+      this.uiC.add(
+        this.add.text(360, sy, "[" + it.set + "]", {
+          fontSize: "9px",
+          fill: "#556",
+          fontFamily: "monospace",
+        }),
+      );
+      let cc = PD.gold >= it.cost ? "#5f5" : "#f55";
+      let bb = this.add
+        .text(430, sy, "Buy:" + it.cost + "g", {
+          fontSize: "10px",
+          fill: cc,
+          fontFamily: "monospace",
+        })
+        .setInteractive({ useHandCursor: true });
+      bb.on("pointerdown", () => {
+        if (PD.gold >= it.cost) {
+          PD.gold -= it.cost;
+          PD.inventory.push({ ...it });
+          this.shopItems.splice(idx, 1);
+          saveGame();
+          this.refreshUI();
+        }
       });
+      this.uiC.add(bb);
+      sy += 14;
+    });
     sy += 4;
     this.uiC.add(
       this.add.text(20, sy, "CONSUMABLES", {
@@ -265,11 +269,7 @@ class ShopScene extends Phaser.Scene {
       }),
     );
     sy += 14;
-    Phaser.Utils.Array.Shuffle([
-      ...CONSUMABLES.filter((c) => !c.minFloor || c.minFloor <= PD.floor),
-    ])
-      .slice(0, 4)
-      .forEach((con) => {
+    this.shopConsumables.forEach((con) => {
         this.uiC.add(
           this.add.text(28, sy, con.name + " - " + con.desc, {
             fontSize: "9px",

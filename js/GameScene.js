@@ -55,6 +55,17 @@ class GameScene extends Phaser.Scene {
       allowGravity: false,
       immovable: true,
     });
+    this.spearFloors = this.physics.add.staticGroup();
+    this.spears = this.physics.add.staticGroup();
+    this.fallingSlabs = this.physics.add.group();
+    this.sbStatic = this.physics.add.staticGroup();
+    this.sbTimerBase = this.physics.add.staticGroup();
+    this.sbTimerSpikes = this.physics.add.staticGroup();
+    this.sbTrigBase = this.physics.add.staticGroup();
+    this.sbTrigSpikes = this.physics.add.staticGroup();
+    this.fallingRocks = this.physics.add.group();
+    this.presses = this.physics.add.group();
+    this.goldenChests = this.physics.add.staticGroup();
 
     let levelData = null;
     for (let attempt = 0; attempt < 50; attempt++) {
@@ -69,6 +80,17 @@ class GameScene extends Phaser.Scene {
       this.ladders.clear(true, true);
       this.breakables.clear(true, true);
       this.movingPlatforms.clear(true, true);
+      this.spearFloors.clear(true, true);
+      this.spears.clear(true, true);
+      this.fallingSlabs.clear(true, true);
+      this.sbStatic.clear(true, true);
+      this.sbTimerBase.clear(true, true);
+      this.sbTimerSpikes.clear(true, true);
+      this.sbTrigBase.clear(true, true);
+      this.sbTrigSpikes.clear(true, true);
+      this.fallingRocks.clear(true, true);
+      this.presses.clear(true, true);
+      this.goldenChests.clear(true, true);
       let map = generateMapData();
       let v = validateLevel(map);
       if (v && v.valid) {
@@ -88,6 +110,17 @@ class GameScene extends Phaser.Scene {
       this.ladders.clear(true, true);
       this.breakables.clear(true, true);
       this.movingPlatforms.clear(true, true);
+      this.spearFloors.clear(true, true);
+      this.spears.clear(true, true);
+      this.fallingSlabs.clear(true, true);
+      this.sbStatic.clear(true, true);
+      this.sbTimerBase.clear(true, true);
+      this.sbTimerSpikes.clear(true, true);
+      this.sbTrigBase.clear(true, true);
+      this.sbTrigSpikes.clear(true, true);
+      this.fallingRocks.clear(true, true);
+      this.presses.clear(true, true);
+      this.goldenChests.clear(true, true);
       let map = generateFallbackMap();
       levelData = {
         map,
@@ -123,7 +156,7 @@ class GameScene extends Phaser.Scene {
     }
 
     let bk = this.biomeKey;
-    let decoTextures = ["deco_stalactite", "deco_mushroom", "deco_bones"];
+    let decoTextures = ["deco_stalactite", "deco_mushroom", "deco_bones", "deco_crate", "deco_barrel", "deco_cobweb", "deco_urn", "deco_torch"];
     for (let r = 0; r < ROWS; r++)
       for (let c = 0; c < COLS; c++) {
         let tx = c * TW + TW / 2,
@@ -198,16 +231,30 @@ class GameScene extends Phaser.Scene {
             break;
           }
           case 11: {
-            this.add
-              .image(
-                tx,
-                ty,
-                decoTextures[
-                  Math.floor(Math.random() * decoTextures.length)
-                ],
-              )
-              .setAlpha(0.5)
-              .setDepth(-1);
+            let dtex = decoTextures[Math.floor(Math.random() * decoTextures.length)];
+            let dimg = this.add.image(tx, ty, dtex).setAlpha(0.5).setDepth(-1);
+            if (dtex === "deco_torch") {
+              dimg.setAlpha(0.9);
+              this.tweens.add({
+                targets: dimg,
+                alpha: { from: 0.75, to: 1.0 },
+                scaleX: { from: 0.93, to: 1.07 },
+                duration: 130 + Math.random() * 90,
+                yoyo: true,
+                repeat: -1,
+                ease: "Sine.easeInOut",
+              });
+              let glow = this.add.circle(tx, ty - 6, 12, 0xff7700, 0.18).setDepth(-1);
+              this.tweens.add({
+                targets: glow,
+                alpha: { from: 0.1, to: 0.32 },
+                scaleX: { from: 0.8, to: 1.25 },
+                scaleY: { from: 0.8, to: 1.25 },
+                duration: 180 + Math.random() * 120,
+                yoyo: true,
+                repeat: -1,
+              });
+            }
             break;
           }
           case 12: {
@@ -239,6 +286,131 @@ class GameScene extends Phaser.Scene {
             el.body.setSize(28, 8);
             el.body.setOffset(2, 24);
             el.setAlpha(0.5);
+            break;
+          }
+          case 15: {
+            let sf = this.spearFloors.create(tx, ty, "spear_floor");
+            sf.spearDelay = -1;
+            sf.spearCooldown = 0;
+            let sp = this.spears.create(tx, ty - TH, "spear");
+            sp.setAlpha(0);
+            sp.spearActive = false;
+            sp.body.setSize(16, 24);
+            sp.body.setOffset(8, 4);
+            sf.spearSprite = sp;
+            break;
+          }
+          case 16: {
+            let sl = this.fallingSlabs.create(tx, ty, "falling_slab");
+            sl.body.setSize(28, 16);
+            sl.body.setOffset(2, 8);
+            sl.body.setAllowGravity(false);
+            sl.body.setImmovable(true);
+            sl.slabState = "idle";
+            sl.slabTimer = 0;
+            sl._originX = tx;
+            // Ray-cast downward to find the first solid tile below this slab
+            let floorR = r + 1;
+            while (floorR < ROWS && !isSolid(map[floorR][c])) floorR++;
+            sl._floorY = floorR * TH;
+            break;
+          }
+          case 17: {
+            let rk = this.fallingRocks.create(tx, ty, "rock");
+            rk.body.setSize(24, 28);
+            rk.body.setOffset(4, 2);
+            rk.body.setAllowGravity(false);
+            rk.body.setImmovable(true);
+            rk.rockState = "idle";
+            rk.rockTimer = 0;
+            rk._originX = tx;
+            let fR = r + 1;
+            while (fR < ROWS && !isSolid(map[fR][c])) fR++;
+            rk._floorY = fR * TH;
+            break;
+          }
+          case 18: {
+            let sb = this.sbStatic.create(tx, ty, "sb_static_up");
+            sb.body.setSize(32, 32);
+            sb.refreshBody();
+            break;
+          }
+          case 19: {
+            let sb = this.sbStatic.create(tx, ty, "sb_static_dn");
+            sb.body.setSize(32, 32);
+            sb.refreshBody();
+            break;
+          }
+          case 20: {
+            let spikesRight = c > 0 && map[r][c - 1] !== 0;
+            let sb = this.sbStatic.create(tx, ty, "sb_static_rt");
+            if (!spikesRight) sb.setFlipX(true);
+            sb.body.setSize(32, 32);
+            sb.refreshBody();
+            break;
+          }
+          case 21: {
+            let sb = this.sbTimerBase.create(tx, ty, "sb_base");
+            sb.setTint(0x99aabb);
+            sb.body.setSize(32, 32);
+            sb.refreshBody();
+            let sp21 = this.sbTimerSpikes.create(tx, ty - TH / 2 - 10, "sb_sp_up");
+            sp21.setAlpha(0);
+            sp21.spActive = false;
+            sp21.body.setSize(30, 18);
+            sp21.body.setOffset(1, 0);
+            sp21.refreshBody();
+            sb.spComp = sp21;
+            sb.spTimer = Math.random() * 3;
+            sb.spCycle = 2.5 + Math.random() * 1.5;
+            break;
+          }
+          case 22: {
+            let sb = this.sbTimerBase.create(tx, ty, "sb_base");
+            sb.setTint(0x99aabb);
+            sb.body.setSize(32, 32);
+            sb.refreshBody();
+            let sp22 = this.sbTimerSpikes.create(tx, ty + TH / 2 + 10, "sb_sp_dn");
+            sp22.setAlpha(0);
+            sp22.spActive = false;
+            sp22.body.setSize(30, 18);
+            sp22.body.setOffset(1, 2);
+            sp22.refreshBody();
+            sb.spComp = sp22;
+            sb.spTimer = Math.random() * 3;
+            sb.spCycle = 2.5 + Math.random() * 1.5;
+            break;
+          }
+          case 23: {
+            let sb = this.sbTrigBase.create(tx, ty, "sb_trig");
+            sb.body.setSize(32, 32);
+            sb.refreshBody();
+            sb.spDelay = -1;
+            sb.spCooldown = 0;
+            let sp23 = this.sbTrigSpikes.create(tx, ty - TH / 2 - 10, "sb_sp_up");
+            sp23.setAlpha(0);
+            sp23.spActive = false;
+            sp23.body.setSize(30, 18);
+            sp23.body.setOffset(1, 0);
+            sp23.refreshBody();
+            sb.spComp = sp23;
+            break;
+          }
+          case 24: {
+            let pr = this.presses.create(tx, ty, "press_body");
+            pr.body.setSize(28, 28);
+            pr.body.setOffset(2, 2);
+            pr.body.setAllowGravity(false);
+            pr.body.setImmovable(true);
+            pr.pressState = "idle_top";
+            pr.pressMode = Math.random() < 0.5 ? "timer" : "trigger";
+            pr.pressTimer = pr.pressMode === "timer" ? 2 + Math.random() * 3 : 0;
+            pr._originX = tx;
+            pr._originY = ty;
+            let pfR = r + 1;
+            while (pfR < ROWS && !isSolid(map[pfR][c])) pfR++;
+            pr._floorY = pfR * TH;
+            pr._holdY = Math.min(ty + TH * 4, pr._floorY - TH * 0.5);
             break;
           }
         }
@@ -283,6 +455,7 @@ class GameScene extends Phaser.Scene {
     this.itemDrops = this.physics.add.group();
     this.projectiles = this.physics.add.group();
     this.spawnPickups();
+    this.spawnGoldenChests();
     this.spawnKey();
     this.shieldSprite = null;
     if (PD.shieldHits > 0)
@@ -406,6 +579,13 @@ class GameScene extends Phaser.Scene {
     );
     this.physics.add.overlap(
       this.player,
+      this.goldenChests,
+      this.openGoldenChest,
+      null,
+      this,
+    );
+    this.physics.add.overlap(
+      this.player,
       this.itemDrops,
       this.collectItem,
       null,
@@ -425,6 +605,59 @@ class GameScene extends Phaser.Scene {
       null,
       this,
     );
+    this.physics.add.collider(this.player, this.spearFloors, (player, sf) => {
+      if (sf.spearDelay < 0 && sf.spearCooldown <= 0) {
+        sf.spearDelay = 0.18;
+        sf.setTint(0xff6622);
+      }
+    });
+    this.physics.add.overlap(this.player, this.spears, this.hitSpear, null, this);
+    this.physics.add.overlap(this.player, this.fallingSlabs, this.hitFallingSlab, null, this);
+    this.physics.add.collider(this.fallingSlabs, this.platforms, (sl) => {
+      if (sl.slabState === "falling") {
+        sl.slabState = "landed";
+        sl.body.setAllowGravity(false);
+        sl.body.setVelocity(0, 0);
+        sl.body.setImmovable(true);
+        for (let i = 0; i < 5; i++) {
+          let p = this.add
+            .circle(sl.x + Phaser.Math.Between(-14, 14), sl.y + 10, 3, 0x888888)
+            .setDepth(5);
+          this.tweens.add({
+            targets: p,
+            y: p.y + 18,
+            alpha: 0,
+            duration: 380,
+            onComplete: () => p.destroy(),
+          });
+        }
+      }
+    });
+    this.physics.add.collider(this.enemies, this.spearFloors);
+    // Static spike blocks — solid + damage on any contact
+    this.physics.add.collider(this.player, this.sbStatic, this.hitSpikeBlock, null, this);
+    this.physics.add.collider(this.enemies, this.sbStatic);
+    // Timer base — solid platform, no direct damage
+    this.physics.add.collider(this.player, this.sbTimerBase);
+    this.physics.add.collider(this.enemies, this.sbTimerBase);
+    // Timer spike companion — overlap damage when active
+    this.physics.add.overlap(this.player, this.sbTimerSpikes, this.hitTimerSpike, null, this);
+    // Triggered base — solid, triggers delay on contact
+    this.physics.add.collider(this.player, this.sbTrigBase, (player, sb) => {
+      if (sb.spDelay < 0 && sb.spCooldown <= 0) {
+        sb.spDelay = 0.3;
+        sb.setTint(0xff9955);
+      }
+    });
+    this.physics.add.collider(this.enemies, this.sbTrigBase);
+    // Triggered spike companion — overlap damage when active
+    this.physics.add.overlap(this.player, this.sbTrigSpikes, this.hitTrigSpike, null, this);
+    // Falling rocks — instant kill on overlap while falling; solid wall when landed
+    this.physics.add.overlap(this.player, this.fallingRocks, this.hitFallingRock, null, this);
+    this.physics.add.collider(this.player, this.fallingRocks, null, (p, rk) => rk.rockState === "landed", this);
+    this.physics.add.collider(this.enemies, this.fallingRocks, null, (e, rk) => rk.rockState === "landed", this);
+    // Press traps — damage while falling or held
+    this.physics.add.overlap(this.player, this.presses, this.hitPress, null, this);
 
     this.physics.add.collider(this.projectiles, this.platforms, (proj) =>
       proj.destroy(),
@@ -484,6 +717,7 @@ class GameScene extends Phaser.Scene {
     });
     this.cameras.main.fadeIn(400);
     saveGame();
+    this.applyPlayerTint();
   }
 
   setMapCell(r, c, v) {
@@ -560,6 +794,38 @@ class GameScene extends Phaser.Scene {
       }
     }
     return 0;
+  }
+  spawnGoldenChests() {
+    let spots = [...(this.validItemSpots || this.validEnemySpots)];
+    Phaser.Utils.Array.Shuffle(spots);
+    let count = PD.floor >= 10 ? 2 : 1;
+    for (let i = 0; i < count && i < spots.length; i++) {
+      let s = spots[i];
+      let gc = this.goldenChests.create(s.c * TW + TW / 2, s.r * TH + TH / 2 - 4, "golden_chest");
+      gc.opened = false;
+      gc.setDepth(6);
+    }
+  }
+  openGoldenChest(p, chest) {
+    if (chest.opened) return;
+    chest.opened = true;
+    chest.setTint(0x666666);
+    let golden = ITEMS.filter((it) => it.noShop && it.rarity === "mythic");
+    if (!golden.length) return;
+    let item = { ...golden[Math.floor(Math.random() * golden.length)] };
+    PD.inventory.push(item);
+    this.floatText(chest.x, chest.y - 22, item.name + "!", RARITIES[item.rarity] || "#ffdd00", "14px");
+    this.cameras.main.flash(350, 0xff, 0xdd, 0x00, false);
+    this.applyPlayerTint();
+  }
+  applyPlayerTint() {
+    for (let sl of ["head", "body", "feet", "weapon"]) {
+      let it = PD.equipment[sl];
+      if (!it || !it.cosmetic) continue;
+      if (it.cosmetic === "golden") { this.player.setTint(0xffdd44); return; }
+      if (it.cosmetic === "shadow") { this.player.setTint(0xcc88ff); return; }
+    }
+    this.player.clearTint();
   }
   spawnKey() {
     if (this.isBossFloor) return;
@@ -661,6 +927,11 @@ class GameScene extends Phaser.Scene {
     e.aggroed = false;
     e.aggroRange = ed.aggroRange || 180;
     e.lostSightTimer = 0;
+    e._basespeed = ed.speed;
+    e.mutated = false;
+    e.mutateTimer = 0;
+    e.mutateCheckTimer = 2 + Math.random() * 4;
+    e.auraGraphics = null;
     e.body.setSize(ed.w - 4, ed.h - 4);
     if (type === "bat" || type === "ghost") {
       e.body.setAllowGravity(false);
@@ -857,6 +1128,48 @@ class GameScene extends Phaser.Scene {
     this.takeDamage(8 + PD.floor * 3);
     p.setVelocityY(JUMP_VEL * 0.4);
   }
+  hitSpear(p, spear) {
+    if (this.invTimer > 0 || this.gameOver || !spear.spearActive) return;
+    this.takeDamage(9 + PD.floor * 2);
+    p.setVelocityY(JUMP_VEL * 0.7);
+  }
+  hitFallingSlab(p, slab) {
+    if (this.invTimer > 0 || this.gameOver || slab.slabState !== "falling") return;
+    this.takeDamage(18 + PD.floor * 2);
+    p.setVelocityX((p.x < slab.x ? -1 : 1) * 180);
+    p.setVelocityY(-180);
+  }
+  hitSpikeBlock(p, block) {
+    if (this.invTimer > 0 || this.gameOver) return;
+    this.takeDamage(12 + PD.floor * 2);
+    p.setVelocityX((p.x < block.x ? -1 : 1) * 150);
+    p.setVelocityY(-160);
+  }
+  hitTimerSpike(p, spike) {
+    if (this.invTimer > 0 || this.gameOver || !spike.spActive) return;
+    this.takeDamage(12 + PD.floor * 2);
+    p.setVelocityX((p.x < spike.x ? -1 : 1) * 150);
+    p.setVelocityY(-160);
+  }
+  hitTrigSpike(p, spike) {
+    if (this.invTimer > 0 || this.gameOver || !spike.spActive) return;
+    this.takeDamage(12 + PD.floor * 2);
+    p.setVelocityX((p.x < spike.x ? -1 : 1) * 150);
+    p.setVelocityY(-160);
+  }
+  hitFallingRock(p, rock) {
+    if (this.gameOver || rock.rockState !== "falling") return;
+    this.takeDamage(PD.hp);
+    p.setVelocityX((p.x < rock.x ? -1 : 1) * 200);
+    p.setVelocityY(-150);
+  }
+  hitPress(p, press) {
+    if (this.invTimer > 0 || this.gameOver) return;
+    if (press.pressState !== "falling" && press.pressState !== "holding") return;
+    this.takeDamage(22 + PD.floor * 3);
+    p.setVelocityX((p.x < press.x ? -1 : 1) * 200);
+    p.setVelocityY(-200);
+  }
   hitProjectile(p, proj) {
     if (this.invTimer > 0 || this.gameOver) return;
     this.takeDamage(proj.damage || 5);
@@ -1037,7 +1350,7 @@ class GameScene extends Phaser.Scene {
     item.destroy();
   }
   dropItem(x, y) {
-    let avail = ITEMS.filter((it) => it.minFloor <= PD.floor + 2);
+    let avail = ITEMS.filter((it) => it.minFloor <= PD.floor + 2 && !it.noShop);
     if (!avail.length) return;
     let w = avail.map((it) => (it.minFloor <= PD.floor ? 3 : 1)),
       total = w.reduce((a, b) => a + b, 0),
@@ -1294,6 +1607,10 @@ class GameScene extends Phaser.Scene {
     }
   }
   damageEnemy(enemy, dmg, crit = false) {
+    if (enemy.mutated) {
+      this.floatText(enemy.x, enemy.y - 15, "IMMUNE!", "#cc44ff");
+      return;
+    }
     enemy.ehp -= dmg;
     enemy.hitFlash = 0.15;
     enemy.setTint(0xffffff);
@@ -1375,6 +1692,10 @@ class GameScene extends Phaser.Scene {
       enemy.nameTag.destroy();
       enemy.nameTag = null;
     }
+    if (enemy.auraGraphics) {
+      enemy.auraGraphics.destroy();
+      enemy.auraGraphics = null;
+    }
     this.enemies.children.each((e) => {
       if (
         e.active &&
@@ -1392,6 +1713,48 @@ class GameScene extends Phaser.Scene {
       if (e.hitFlash <= 0) e.clearTint();
     }
     if (e.attackCd > 0) e.attackCd -= dt;
+
+    // --- Mutation system ---
+    if (!e.isBoss) {
+      if (e.mutated) {
+        e.mutateTimer -= dt;
+        if (e.mutateTimer <= 0) {
+          e.mutated = false;
+          e.espeed = e._basespeed;
+          if (e.auraGraphics) { e.auraGraphics.destroy(); e.auraGraphics = null; }
+        } else {
+          if (!e.auraGraphics) e.auraGraphics = this.add.graphics().setDepth(12);
+          let ag = e.auraGraphics;
+          ag.clear();
+          let pulse = 0.55 + Math.sin(this.time.now * 0.006) * 0.45;
+          let aw = e.displayWidth + 10, ah = e.displayHeight + 10;
+          ag.lineStyle(3, 0xcc44ff, pulse);
+          ag.strokeRect(e.x - aw / 2, e.y - ah / 2, aw, ah);
+          ag.lineStyle(1, 0xffffff, pulse * 0.7);
+          ag.strokeRect(e.x - aw / 2 + 4, e.y - ah / 2 + 4, aw - 8, ah - 8);
+          let sc = 3, sa = pulse > 0.6 ? pulse : 0;
+          ag.fillStyle(0xee99ff, sa);
+          ag.fillRect(e.x - aw / 2 - 1, e.y - ah / 2 - 1, sc, sc);
+          ag.fillRect(e.x + aw / 2 - sc + 1, e.y - ah / 2 - 1, sc, sc);
+          ag.fillRect(e.x - aw / 2 - 1, e.y + ah / 2 - sc + 1, sc, sc);
+          ag.fillRect(e.x + aw / 2 - sc + 1, e.y + ah / 2 - sc + 1, sc, sc);
+        }
+      } else {
+        e.mutateCheckTimer -= dt;
+        if (e.mutateCheckTimer <= 0) {
+          e.mutateCheckTimer = 3 + Math.random() * 3;
+          let chance = Math.min(0.35, 0.07 + PD.floor * 0.005);
+          if (Math.random() < chance) {
+            e.mutated = true;
+            e.mutateTimer = 5 + Math.random() * 3;
+            e.espeed = e._basespeed * 1.5;
+            e.aggroed = true;
+            this.floatText(e.x, e.y - 22, "MUTATED!", "#cc44ff", "13px");
+          }
+        }
+      }
+    }
+
     let dx = this.player.x - e.x,
       dy = this.player.y - e.y,
       dist = Math.sqrt(dx * dx + dy * dy);
@@ -1563,7 +1926,7 @@ class GameScene extends Phaser.Scene {
         this.player.setAlpha(Math.sin(time * 0.02) > 0 ? 1 : 0.3);
       if (this.invTimer <= 0) {
         this.player.setAlpha(1);
-        this.player.clearTint();
+        this.applyPlayerTint();
       }
     }
     this.regenTimer += dt;
@@ -1656,6 +2019,220 @@ class GameScene extends Phaser.Scene {
       }
     });
 
+    // Update spear floors
+    this.spearFloors.children.each((sf) => {
+      if (!sf.active || !sf.spearSprite) return;
+      if (sf.spearCooldown > 0) sf.spearCooldown -= dt;
+      if (sf.spearDelay >= 0) {
+        sf.spearDelay -= dt;
+        if (sf.spearDelay <= 0) {
+          sf.spearDelay = -1;
+          sf.spearSprite.spearActive = true;
+          this.tweens.add({
+            targets: sf.spearSprite,
+            alpha: 1,
+            duration: 70,
+            onComplete: () => {
+              this.time.delayedCall(350, () => {
+                if (!sf.active || !sf.spearSprite) return;
+                this.tweens.add({
+                  targets: sf.spearSprite,
+                  alpha: 0,
+                  duration: 180,
+                  onComplete: () => {
+                    if (sf.spearSprite) sf.spearSprite.spearActive = false;
+                    sf.clearTint();
+                    sf.spearCooldown = 3;
+                  },
+                });
+              });
+            },
+          });
+        }
+      }
+    });
+
+    // Update falling slabs
+    this.fallingSlabs.children.each((sl) => {
+      if (!sl.active || sl.slabState === "landed") return;
+      if (sl.slabState === "idle") {
+        let dx = Math.abs(this.player.x - sl.x);
+        if (dx < TW * 0.6 && this.player.y > sl.y && this.player.y < sl._floorY) {
+          sl.slabState = "warning";
+          sl.slabTimer = 0.35;
+          sl.setTint(0xff8844);
+          for (let i = 0; i < 4; i++) {
+            let p = this.add
+              .circle(sl.x + Phaser.Math.Between(-12, 12), sl.y - 6, 2, 0xaaaaaa)
+              .setDepth(5);
+            this.tweens.add({
+              targets: p,
+              y: p.y - 12,
+              alpha: 0,
+              duration: 500,
+              onComplete: () => p.destroy(),
+            });
+          }
+        }
+      } else if (sl.slabState === "warning") {
+        sl.slabTimer -= dt;
+        sl.x = sl._originX + Math.sin(this.time.now * 0.025) * 2;
+        sl.body.reset(sl.x, sl.y);
+        if (sl.slabTimer <= 0) {
+          sl.slabState = "falling";
+          sl.x = sl._originX;
+          sl.body.reset(sl.x, sl.y);
+          sl.body.setAllowGravity(true);
+          sl.body.setImmovable(false);
+          sl.body.setVelocityY(600);
+          sl.clearTint();
+        }
+      }
+    });
+
+    // Update timer spike blocks
+    this.sbTimerBase.children.each((sb) => {
+      if (!sb.active || !sb.spComp) return;
+      sb.spTimer += dt;
+      let active = (sb.spTimer % sb.spCycle) < sb.spCycle * 0.45;
+      sb.spComp.spActive = active;
+      sb.spComp.setAlpha(active ? 1 : 0);
+    });
+
+    // Update triggered spike blocks
+    this.sbTrigBase.children.each((sb) => {
+      if (!sb.active || !sb.spComp) return;
+      if (sb.spCooldown > 0) sb.spCooldown -= dt;
+      if (sb.spDelay >= 0) {
+        sb.spDelay -= dt;
+        if (sb.spDelay <= 0) {
+          sb.spDelay = -1;
+          sb.spComp.spActive = true;
+          this.tweens.add({
+            targets: sb.spComp,
+            alpha: 1,
+            duration: 60,
+            onComplete: () => {
+              this.time.delayedCall(550, () => {
+                if (!sb.active || !sb.spComp) return;
+                this.tweens.add({
+                  targets: sb.spComp,
+                  alpha: 0,
+                  duration: 150,
+                  onComplete: () => {
+                    if (sb.spComp) sb.spComp.spActive = false;
+                    sb.clearTint();
+                    sb.spCooldown = 2.5;
+                  },
+                });
+              });
+            },
+          });
+        }
+      }
+    });
+
+    // Update falling rocks (instant-kill, minimal warning)
+    this.fallingRocks.children.each((rk) => {
+      if (!rk.active || rk.rockState === "landed") return;
+      if (rk.rockState === "idle") {
+        let dx = Math.abs(this.player.x - rk.x);
+        if (dx < TW * 0.9 && this.player.y > rk.y && this.player.y < rk._floorY) {
+          rk.rockState = "warning";
+          rk.rockTimer = 0.1;
+          rk.setTint(0xff6633);
+        }
+      } else if (rk.rockState === "warning") {
+        rk.rockTimer -= dt;
+        rk.x = rk._originX + Math.sin(this.time.now * 0.04) * 1.5;
+        rk.body.reset(rk.x, rk.y);
+        if (rk.rockTimer <= 0) {
+          rk.rockState = "falling";
+          rk.x = rk._originX;
+          rk.body.reset(rk.x, rk.y);
+          rk.body.setAllowGravity(true);
+          rk.body.setImmovable(false);
+          rk.body.setVelocityY(820);
+          rk.clearTint();
+        }
+      } else if (rk.rockState === "falling") {
+        if (rk.y >= rk._floorY - TH / 2) {
+          rk.rockState = "landed";
+          rk.body.setVelocity(0, 0);
+          rk.body.setAllowGravity(false);
+          rk.body.setImmovable(true);
+          rk.body.reset(rk._originX, rk._floorY - TH / 2);
+          this.cameras.main.shake(130, 0.018);
+          for (let i = 0; i < 6; i++) {
+            let p = this.add
+              .circle(rk.x + Phaser.Math.Between(-14, 14), rk.y + 12, 3, 0x6a5a4a)
+              .setDepth(5);
+            this.tweens.add({
+              targets: p,
+              y: p.y + 20,
+              alpha: 0,
+              duration: 400,
+              onComplete: () => p.destroy(),
+            });
+          }
+        }
+      }
+    });
+
+    // Update press traps
+    this.presses.children.each((pr) => {
+      if (!pr.active) return;
+      if (pr.pressState === "idle_top") {
+        if (pr.pressMode === "timer") {
+          pr.pressTimer -= dt;
+          if (pr.pressTimer <= 0) {
+            pr.pressState = "warning";
+            pr.pressTimer = 0.15;
+            pr.setTint(0xff9933);
+          }
+        } else {
+          let dx = Math.abs(this.player.x - pr.x);
+          if (dx < TW && this.player.y > pr.y && this.player.y < pr._floorY) {
+            pr.pressState = "warning";
+            pr.pressTimer = 0.2;
+            pr.setTint(0xff9933);
+          }
+        }
+      } else if (pr.pressState === "warning") {
+        pr.pressTimer -= dt;
+        pr.x = pr._originX + Math.sin(this.time.now * 0.035) * 2;
+        pr.body.reset(pr.x, pr.y);
+        if (pr.pressTimer <= 0) {
+          pr.pressState = "falling";
+          pr.x = pr._originX;
+          pr.body.reset(pr.x, pr.y);
+          pr.body.setImmovable(false);
+          pr.clearTint();
+        }
+      } else if (pr.pressState === "falling") {
+        pr.body.setVelocityY(700);
+        if (pr.y >= pr._holdY) {
+          pr.body.reset(pr.x, pr._holdY);
+          pr.body.setVelocity(0, 0);
+          pr.pressState = "holding_bottom";
+          pr.pressTimer = 0.4;
+          this.cameras.main.shake(100, 0.012);
+        }
+      } else if (pr.pressState === "holding_bottom") {
+        pr.pressTimer -= dt;
+        if (pr.pressTimer <= 0) pr.pressState = "rising";
+      } else if (pr.pressState === "rising") {
+        pr.body.setVelocityY(-200);
+        if (pr.y <= pr._originY) {
+          pr.body.reset(pr.x, pr._originY);
+          pr.body.setVelocity(0, 0);
+          pr.body.setImmovable(true);
+          pr.pressState = "idle_top";
+          pr.pressTimer = pr.pressMode === "timer" ? 2 + Math.random() * 3 : 0;
+        }
+      }
+    });
+
     // Update moving platforms
     this.movingPlatforms.children.each((mp) => {
       if (!mp.active) return;
@@ -1737,9 +2314,19 @@ class GameScene extends Phaser.Scene {
         this.player.setVelocityX(this.playerVx);
         this.player.body.setDragX(0);
       } else {
-        // Normal ground: responsive control
-        this.player.body.setDragX(inputX === 0 ? 1200 : 0);
-        if (inputX !== 0) this.player.setVelocityX(targetVx);
+        // Detect if pressing directly into a wall while airborne (wall slide)
+        let onWallL = this.player.body.blocked.left;
+        let onWallR = this.player.body.blocked.right;
+        let slidingWall = !onFloor && ((inputX < 0 && onWallL) || (inputX > 0 && onWallR));
+        if (slidingWall) {
+          // Just maintain gentle wall contact — gravity does the sliding
+          this.player.setVelocityX(inputX * 8);
+          this.player.body.setDragX(0);
+        } else {
+          // Normal ground: responsive control
+          this.player.body.setDragX(inputX === 0 ? 1200 : 0);
+          if (inputX !== 0) this.player.setVelocityX(targetVx);
+        }
         this.playerVx = this.player.body.velocity.x;
       }
 

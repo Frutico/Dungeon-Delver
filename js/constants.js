@@ -24,6 +24,7 @@ const RARITIES = {
   rare: "#5555ff",
   epic: "#ff55ff",
   legendary: "#ffaa00",
+  mythic: "#ffdd00",
 };
 const BIOMES = {
   cave: {

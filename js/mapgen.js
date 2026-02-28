@@ -1,5 +1,5 @@
 function isSolid(v) {
-  return v === 1 || v === 2 || v === 3 || v === 6 || v === 7 || v === 8;
+  return v === 1 || v === 2 || v === 3 || v === 6 || v === 7 || v === 8 || v === 15 || v === 18 || v === 21 || v === 23;
 }
 function floodReachable(map, startR, startC) {
   let visited = new Set();
@@ -99,7 +99,9 @@ function floodReachable(map, startR, startC) {
 // map cell types:
 // 0=air, 1=ground, 2=wall, 3=platform, 4=spike, 5=ladder, 6=breakable,
 // 7=ice, 8=crumble, 9=fire_trap, 10=moving_platform(marker), 11=decor,
-// 12=pop_spike, 13=turret, 14=electric
+// 12=pop_spike, 13=turret, 14=electric, 15=spear_floor, 16=falling_slab,
+// 17=rock, 18=sb_static_up, 19=sb_static_dn, 20=sb_static_rt,
+// 21=sb_timer_up, 22=sb_timer_dn, 23=sb_trig, 24=press_trap
 function generateMapData() {
   let map = [];
   for (let r = 0; r < ROWS; r++) {
@@ -294,6 +296,148 @@ function generateMapData() {
       for (let r = ROWS - 3; r > 3; r--) {
         if (isSolid(map[r][ec]) && map[r - 1][ec] === 0) {
           map[r - 1][ec] = 14;
+          break;
+        }
+      }
+    }
+  }
+  // Spear floors (replace some ground tiles — walkable but shoot spears when stepped on)
+  if (PD.floor >= 3) {
+    let spfCh = 0.012 + PD.floor * 0.003;
+    for (let r = 2; r < ROWS - 1; r++)
+      for (let c = 4; c < COLS - 4; c++) {
+        if (map[r][c] === 1 && map[r - 1][c] === 0 && Math.random() < spfCh) {
+          if (r >= ROWS - 3 && c < 7) continue;
+          map[r][c] = 15;
+        }
+      }
+  }
+  // Falling slabs (hang below a solid tile and drop when walked under)
+  if (PD.floor >= 2) {
+    let slabCount = 1 + Math.floor(PD.floor / 3);
+    for (let i = 0; i < slabCount; i++) {
+      let sc = 4 + Math.floor(Math.random() * (COLS - 8));
+      for (let r = 1; r < ROWS - 5; r++) {
+        if (isSolid(map[r][sc]) && map[r + 1][sc] === 0 && map[r + 2][sc] === 0) {
+          map[r + 1][sc] = 16;
+          break;
+        }
+      }
+    }
+  }
+  // Falling rocks (instant kill — hang below a solid, fall when player in column)
+  {
+    let rockCount = 1 + Math.floor(PD.floor / 5);
+    for (let i = 0; i < rockCount; i++) {
+      let rc = 5 + Math.floor(Math.random() * (COLS - 10));
+      for (let r = 1; r < ROWS - 6; r++) {
+        if (isSolid(map[r][rc]) && map[r + 1][rc] === 0 && map[r + 2][rc] === 0) {
+          map[r + 1][rc] = 17;
+          break;
+        }
+      }
+    }
+  }
+  // Static spike blocks: floor (up), ceiling (down), wall (side) — in groups of 2-4
+  {
+    let gsCount = 1 + Math.floor(PD.floor / 3);
+    for (let i = 0; i < gsCount; i++) {
+      // Floor groups
+      let gc = 5 + Math.floor(Math.random() * (COLS - 10));
+      let gLen = 2 + Math.floor(Math.random() * 3);
+      for (let r = ROWS - 3; r > 3; r--) {
+        if (isSolid(map[r][gc]) && map[r - 1][gc] === 0) {
+          for (let j = 0; j < gLen && gc + j < COLS - 3; j++) {
+            if ((map[r][gc + j] === 1 || map[r][gc + j] === 3) && map[r - 1][gc + j] === 0)
+              map[r][gc + j] = 18;
+          }
+          break;
+        }
+      }
+      // Ceiling groups (floor 3+)
+      if (PD.floor >= 3) {
+        let cc = 5 + Math.floor(Math.random() * (COLS - 10));
+        let cLen = 2 + Math.floor(Math.random() * 3);
+        for (let r = 1; r < Math.floor(ROWS / 2); r++) {
+          if (isSolid(map[r][cc]) && map[r + 1][cc] === 0) {
+            for (let j = 0; j < cLen && cc + j < COLS - 3; j++) {
+              if (isSolid(map[r][cc + j]) && map[r + 1][cc + j] === 0)
+                map[r + 1][cc + j] = 19;
+            }
+            break;
+          }
+        }
+      }
+      // Wall groups (floor 4+) — vertical run adjacent to a wall
+      if (PD.floor >= 4) {
+        let wr = 5 + Math.floor(Math.random() * (ROWS - 10));
+        let wLen = 2 + Math.floor(Math.random() * 2);
+        for (let c = 2; c < COLS - 2; c++) {
+          if (isSolid(map[wr][c]) && map[wr][c + 1] === 0) {
+            for (let j = 0; j < wLen && wr + j < ROWS - 2; j++) {
+              if (isSolid(map[wr + j][c]) && map[wr + j][c + 1] === 0)
+                map[wr + j][c + 1] = 20;
+            }
+            break;
+          }
+        }
+      }
+    }
+  }
+  // Timer spike blocks: floor + hidden ceiling variants (floor 3+)
+  if (PD.floor >= 3) {
+    let gtCount = 1 + Math.floor(PD.floor / 4);
+    for (let i = 0; i < gtCount; i++) {
+      let gc = 5 + Math.floor(Math.random() * (COLS - 10));
+      let gLen = 2 + Math.floor(Math.random() * 3);
+      for (let r = ROWS - 3; r > 3; r--) {
+        if (isSolid(map[r][gc]) && map[r - 1][gc] === 0) {
+          for (let j = 0; j < gLen && gc + j < COLS - 3; j++) {
+            if ((map[r][gc + j] === 1 || map[r][gc + j] === 3) && map[r - 1][gc + j] === 0)
+              map[r][gc + j] = 21;
+          }
+          break;
+        }
+      }
+      // Ceiling (hidden — block looks plain until spikes extend)
+      let cc = 5 + Math.floor(Math.random() * (COLS - 10));
+      let cLen = 2 + Math.floor(Math.random() * 3);
+      for (let r = 1; r < Math.floor(ROWS / 2); r++) {
+        if (isSolid(map[r][cc]) && map[r + 1][cc] === 0) {
+          for (let j = 0; j < cLen && cc + j < COLS - 3; j++) {
+            if (isSolid(map[r][cc + j]) && map[r + 1][cc + j] === 0)
+              map[r + 1][cc + j] = 22;
+          }
+          break;
+        }
+      }
+    }
+  }
+  // Triggered spike blocks (floor 2+, step-triggered, groups of 1-3)
+  if (PD.floor >= 2) {
+    let gtrCount = 1 + Math.floor(PD.floor / 3);
+    for (let i = 0; i < gtrCount; i++) {
+      let gc = 5 + Math.floor(Math.random() * (COLS - 10));
+      let gLen = 1 + Math.floor(Math.random() * 3);
+      for (let r = ROWS - 3; r > 3; r--) {
+        if (isSolid(map[r][gc]) && map[r - 1][gc] === 0) {
+          for (let j = 0; j < gLen && gc + j < COLS - 3; j++) {
+            if ((map[r][gc + j] === 1 || map[r][gc + j] === 3) && map[r - 1][gc + j] === 0)
+              map[r][gc + j] = 23;
+          }
+          break;
+        }
+      }
+    }
+  }
+  // Press traps (floor 3+, random timer or trigger mode)
+  if (PD.floor >= 3) {
+    let pressCount = 1 + Math.floor(PD.floor / 4);
+    for (let i = 0; i < pressCount; i++) {
+      let pc = 5 + Math.floor(Math.random() * (COLS - 10));
+      for (let r = 1; r < ROWS - 6; r++) {
+        if (isSolid(map[r][pc]) && map[r + 1][pc] === 0 && map[r + 2][pc] === 0) {
+          map[r + 1][pc] = 24;
           break;
         }
       }
