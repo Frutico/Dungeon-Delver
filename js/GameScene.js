@@ -66,6 +66,12 @@ class GameScene extends Phaser.Scene {
     this.fallingRocks = this.physics.add.group();
     this.presses = this.physics.add.group();
     this.goldenChests = this.physics.add.staticGroup();
+    this.springs = this.physics.add.staticGroup();
+    this.conveyors = this.physics.add.staticGroup();
+    this.lavaZones = this.physics.add.staticGroup();
+    this.cobwebs = this.physics.add.staticGroup();
+    this.steamVents = this.physics.add.staticGroup();
+    this.mushrooms = this.physics.add.staticGroup();
 
     let levelData = null;
     for (let attempt = 0; attempt < 50; attempt++) {
@@ -91,6 +97,12 @@ class GameScene extends Phaser.Scene {
       this.fallingRocks.clear(true, true);
       this.presses.clear(true, true);
       this.goldenChests.clear(true, true);
+      this.springs.clear(true, true);
+      this.conveyors.clear(true, true);
+      this.lavaZones.clear(true, true);
+      this.cobwebs.clear(true, true);
+      this.steamVents.clear(true, true);
+      this.mushrooms.clear(true, true);
       let map = generateMapData();
       let v = validateLevel(map);
       if (v && v.valid) {
@@ -121,6 +133,12 @@ class GameScene extends Phaser.Scene {
       this.fallingRocks.clear(true, true);
       this.presses.clear(true, true);
       this.goldenChests.clear(true, true);
+      this.springs.clear(true, true);
+      this.conveyors.clear(true, true);
+      this.lavaZones.clear(true, true);
+      this.cobwebs.clear(true, true);
+      this.steamVents.clear(true, true);
+      this.mushrooms.clear(true, true);
       let map = generateFallbackMap();
       levelData = {
         map,
@@ -156,7 +174,16 @@ class GameScene extends Phaser.Scene {
     }
 
     let bk = this.biomeKey;
-    let decoTextures = ["deco_stalactite", "deco_mushroom", "deco_bones", "deco_crate", "deco_barrel", "deco_cobweb", "deco_urn", "deco_torch"];
+    let decoTextures = [
+      "deco_stalactite",
+      "deco_mushroom",
+      "deco_bones",
+      "deco_crate",
+      "deco_barrel",
+      "deco_cobweb",
+      "deco_urn",
+      "deco_torch",
+    ];
     for (let r = 0; r < ROWS; r++)
       for (let c = 0; c < COLS; c++) {
         let tx = c * TW + TW / 2,
@@ -165,9 +192,17 @@ class GameScene extends Phaser.Scene {
           case 1:
             this.platforms.create(tx, ty, "ground_" + bk);
             break;
-          case 2:
-            this.platforms.create(tx, ty, "wall_" + bk);
+          case 2: {
+            let wt = this.platforms.create(tx, ty, "wall_" + bk);
+            // Inset body 1px from the top so the wall's top surface sits
+            // below floor level — prevents ambiguous seam resolution where
+            // physics pushes the player upward into the wall instead of
+            // sideways when they run into it at floor height.
+            wt.body.setSize(32, 31);
+            wt.body.setOffset(0, 1);
+            wt.refreshBody();
             break;
+          }
           case 3:
             this.platforms.create(tx, ty, "platform_" + bk);
             break;
@@ -196,11 +231,7 @@ class GameScene extends Phaser.Scene {
             break;
           }
           case 8: {
-            let cp = this.crumblePlatforms.create(
-              tx,
-              ty,
-              "crumble_platform",
-            );
+            let cp = this.crumblePlatforms.create(tx, ty, "crumble_platform");
             cp.crumbleTimer = -1;
             break;
           }
@@ -231,7 +262,8 @@ class GameScene extends Phaser.Scene {
             break;
           }
           case 11: {
-            let dtex = decoTextures[Math.floor(Math.random() * decoTextures.length)];
+            let dtex =
+              decoTextures[Math.floor(Math.random() * decoTextures.length)];
             let dimg = this.add.image(tx, ty, dtex).setAlpha(0.5).setDepth(-1);
             if (dtex === "deco_torch") {
               dimg.setAlpha(0.9);
@@ -244,7 +276,9 @@ class GameScene extends Phaser.Scene {
                 repeat: -1,
                 ease: "Sine.easeInOut",
               });
-              let glow = this.add.circle(tx, ty - 6, 12, 0xff7700, 0.18).setDepth(-1);
+              let glow = this.add
+                .circle(tx, ty - 6, 12, 0xff7700, 0.18)
+                .setDepth(-1);
               this.tweens.add({
                 targets: glow,
                 alpha: { from: 0.1, to: 0.32 },
@@ -273,8 +307,7 @@ class GameScene extends Phaser.Scene {
             tr.body.setOffset(1, 6);
             tr.shotTimer = 0;
             tr.shotInterval = 1.2 + Math.random();
-            tr.dir =
-              map[r][c + 1] === 0 ? 1 : map[r][c - 1] === 0 ? -1 : 1;
+            tr.dir = map[r][c + 1] === 0 ? 1 : map[r][c - 1] === 0 ? -1 : 1;
             if (tr.dir < 0) tr.setFlipX(true);
             break;
           }
@@ -354,7 +387,11 @@ class GameScene extends Phaser.Scene {
             sb.setTint(0x99aabb);
             sb.body.setSize(32, 32);
             sb.refreshBody();
-            let sp21 = this.sbTimerSpikes.create(tx, ty - TH / 2 - 10, "sb_sp_up");
+            let sp21 = this.sbTimerSpikes.create(
+              tx,
+              ty - TH / 2 - 10,
+              "sb_sp_up",
+            );
             sp21.setAlpha(0);
             sp21.spActive = false;
             sp21.body.setSize(30, 18);
@@ -370,7 +407,11 @@ class GameScene extends Phaser.Scene {
             sb.setTint(0x99aabb);
             sb.body.setSize(32, 32);
             sb.refreshBody();
-            let sp22 = this.sbTimerSpikes.create(tx, ty + TH / 2 + 10, "sb_sp_dn");
+            let sp22 = this.sbTimerSpikes.create(
+              tx,
+              ty + TH / 2 + 10,
+              "sb_sp_dn",
+            );
             sp22.setAlpha(0);
             sp22.spActive = false;
             sp22.body.setSize(30, 18);
@@ -387,7 +428,11 @@ class GameScene extends Phaser.Scene {
             sb.refreshBody();
             sb.spDelay = -1;
             sb.spCooldown = 0;
-            let sp23 = this.sbTrigSpikes.create(tx, ty - TH / 2 - 10, "sb_sp_up");
+            let sp23 = this.sbTrigSpikes.create(
+              tx,
+              ty - TH / 2 - 10,
+              "sb_sp_up",
+            );
             sp23.setAlpha(0);
             sp23.spActive = false;
             sp23.body.setSize(30, 18);
@@ -404,13 +449,89 @@ class GameScene extends Phaser.Scene {
             pr.body.setImmovable(true);
             pr.pressState = "idle_top";
             pr.pressMode = Math.random() < 0.5 ? "timer" : "trigger";
-            pr.pressTimer = pr.pressMode === "timer" ? 2 + Math.random() * 3 : 0;
+            pr.pressTimer =
+              pr.pressMode === "timer" ? 2 + Math.random() * 3 : 0;
             pr._originX = tx;
             pr._originY = ty;
             let pfR = r + 1;
             while (pfR < ROWS && !isSolid(map[pfR][c])) pfR++;
             pr._floorY = pfR * TH;
             pr._holdY = Math.min(ty + TH * 4, pr._floorY - TH * 0.5);
+            break;
+          }
+          case 25: {
+            // Spring — solid platform that launches player upward
+            let sp = this.springs.create(tx, ty, "spring_tile");
+            sp.body.setSize(32, 8);
+            sp.body.setOffset(0, 24);
+            sp.refreshBody();
+            break;
+          }
+          case 27: {
+            // Conveyor left — solid belt that pushes player left
+            let cv = this.conveyors.create(tx, ty, "conveyor_l");
+            cv.body.setSize(32, 8);
+            cv.body.setOffset(0, 20);
+            cv.conveyorDir = -1;
+            cv.refreshBody();
+            break;
+          }
+          case 28: {
+            // Conveyor right — solid belt that pushes player right
+            let cv = this.conveyors.create(tx, ty, "conveyor_r");
+            cv.body.setSize(32, 8);
+            cv.body.setOffset(0, 20);
+            cv.conveyorDir = 1;
+            cv.refreshBody();
+            break;
+          }
+          case 29: {
+            // Lava surface — lethal overlap hazard
+            let lv = this.lavaZones.create(tx, ty, "lava_tile");
+            lv.body.setSize(32, 32);
+            lv.refreshBody();
+            // Animated flicker
+            this.tweens.add({
+              targets: lv,
+              alpha: { from: 0.85, to: 1.0 },
+              duration: 300 + Math.random() * 200,
+              yoyo: true,
+              repeat: -1,
+            });
+            break;
+          }
+          case 30: {
+            // Lava body — same but dimmer visual
+            let lv = this.lavaZones.create(tx, ty, "lava_body_tile");
+            lv.body.setSize(32, 32);
+            lv.refreshBody();
+            break;
+          }
+          case 31: {
+            // Cobweb — slows movement (non-solid, overlap-based)
+            let cw = this.cobwebs.create(tx, ty, "cobweb_tile");
+            cw.body.setSize(32, 32);
+            cw.setAlpha(0.7);
+            cw.refreshBody();
+            break;
+          }
+          case 38: {
+            // Steam vent — solid tile that periodically blasts player upward
+            let sv = this.steamVents.create(tx, ty, "steam_vent_tile");
+            sv.body.setSize(32, 16);
+            sv.body.setOffset(0, 0);
+            sv.ventTimer = Math.random() * 3;
+            sv.ventCycle = 3 + Math.random() * 2;
+            sv.ventActive = false;
+            sv.refreshBody();
+            break;
+          }
+          case 40: {
+            // Mushroom — solid bounce surface
+            let ms = this.mushrooms.create(tx, ty, "mushroom_tile");
+            ms.body.setSize(32, 8);
+            ms.body.setOffset(0, 6);
+            ms.refreshBody();
             break;
           }
         }
@@ -466,13 +587,9 @@ class GameScene extends Phaser.Scene {
 
     // Collisions
     this.physics.add.collider(this.player, this.platforms);
-    this.physics.add.collider(
-      this.player,
-      this.icePlatforms,
-      (player, ice) => {
-        this.onIce = true;
-      },
-    );
+    this.physics.add.collider(this.player, this.icePlatforms, (player, ice) => {
+      this.onIce = true;
+    });
     this.physics.add.collider(
       this.player,
       this.crumblePlatforms,
@@ -611,8 +728,20 @@ class GameScene extends Phaser.Scene {
         sf.setTint(0xff6622);
       }
     });
-    this.physics.add.overlap(this.player, this.spears, this.hitSpear, null, this);
-    this.physics.add.overlap(this.player, this.fallingSlabs, this.hitFallingSlab, null, this);
+    this.physics.add.overlap(
+      this.player,
+      this.spears,
+      this.hitSpear,
+      null,
+      this,
+    );
+    this.physics.add.overlap(
+      this.player,
+      this.fallingSlabs,
+      this.hitFallingSlab,
+      null,
+      this,
+    );
     this.physics.add.collider(this.fallingSlabs, this.platforms, (sl) => {
       if (sl.slabState === "falling") {
         sl.slabState = "landed";
@@ -635,13 +764,25 @@ class GameScene extends Phaser.Scene {
     });
     this.physics.add.collider(this.enemies, this.spearFloors);
     // Static spike blocks — solid + damage on any contact
-    this.physics.add.collider(this.player, this.sbStatic, this.hitSpikeBlock, null, this);
+    this.physics.add.collider(
+      this.player,
+      this.sbStatic,
+      this.hitSpikeBlock,
+      null,
+      this,
+    );
     this.physics.add.collider(this.enemies, this.sbStatic);
     // Timer base — solid platform, no direct damage
     this.physics.add.collider(this.player, this.sbTimerBase);
     this.physics.add.collider(this.enemies, this.sbTimerBase);
     // Timer spike companion — overlap damage when active
-    this.physics.add.overlap(this.player, this.sbTimerSpikes, this.hitTimerSpike, null, this);
+    this.physics.add.overlap(
+      this.player,
+      this.sbTimerSpikes,
+      this.hitTimerSpike,
+      null,
+      this,
+    );
     // Triggered base — solid, triggers delay on contact
     this.physics.add.collider(this.player, this.sbTrigBase, (player, sb) => {
       if (sb.spDelay < 0 && sb.spCooldown <= 0) {
@@ -651,26 +792,87 @@ class GameScene extends Phaser.Scene {
     });
     this.physics.add.collider(this.enemies, this.sbTrigBase);
     // Triggered spike companion — overlap damage when active
-    this.physics.add.overlap(this.player, this.sbTrigSpikes, this.hitTrigSpike, null, this);
+    this.physics.add.overlap(
+      this.player,
+      this.sbTrigSpikes,
+      this.hitTrigSpike,
+      null,
+      this,
+    );
     // Falling rocks — instant kill on overlap while falling; solid wall when landed
-    this.physics.add.overlap(this.player, this.fallingRocks, this.hitFallingRock, null, this);
-    this.physics.add.collider(this.player, this.fallingRocks, null, (p, rk) => rk.rockState === "landed", this);
-    this.physics.add.collider(this.enemies, this.fallingRocks, null, (e, rk) => rk.rockState === "landed", this);
+    this.physics.add.overlap(
+      this.player,
+      this.fallingRocks,
+      this.hitFallingRock,
+      null,
+      this,
+    );
+    this.physics.add.collider(
+      this.player,
+      this.fallingRocks,
+      null,
+      (p, rk) => rk.rockState === "landed",
+      this,
+    );
+    this.physics.add.collider(
+      this.enemies,
+      this.fallingRocks,
+      null,
+      (e, rk) => rk.rockState === "landed",
+      this,
+    );
     // Press traps — damage while falling or held
-    this.physics.add.overlap(this.player, this.presses, this.hitPress, null, this);
+    this.physics.add.overlap(
+      this.player,
+      this.presses,
+      this.hitPress,
+      null,
+      this,
+    );
+
+    // Springs — launch player upward when landed on from above
+    this.physics.add.collider(
+      this.player,
+      this.springs,
+      this.hitSpring,
+      (p) => p.body.velocity.y > 0,
+      this,
+    );
+    this.physics.add.collider(this.enemies, this.springs);
+    // Conveyors — solid belt; movement applied in update loop
+    this.physics.add.collider(this.player, this.conveyors);
+    this.physics.add.collider(this.enemies, this.conveyors);
+    // Lava — lethal overlap damage
+    this.physics.add.overlap(
+      this.player,
+      this.lavaZones,
+      this.hitLava,
+      null,
+      this,
+    );
+    // Cobwebs — slows movement; handled via mapData in update loop
+    // (just need the visual group; no collider since cobweb is non-solid)
+    // Steam vents — solid tile, blast handled in update loop
+    this.physics.add.collider(this.player, this.steamVents);
+    this.physics.add.collider(this.enemies, this.steamVents);
+    // Mushrooms — bounce the player upward when landed on
+    this.physics.add.collider(
+      this.player,
+      this.mushrooms,
+      this.hitMushroom,
+      (p) => p.body.velocity.y > 0,
+      this,
+    );
+    this.physics.add.collider(this.enemies, this.mushrooms);
 
     this.physics.add.collider(this.projectiles, this.platforms, (proj) =>
       proj.destroy(),
     );
-    this.physics.add.collider(
-      this.projectiles,
-      this.icePlatforms,
-      (proj) => proj.destroy(),
+    this.physics.add.collider(this.projectiles, this.icePlatforms, (proj) =>
+      proj.destroy(),
     );
-    this.physics.add.collider(
-      this.projectiles,
-      this.breakables,
-      (proj, br) => proj.destroy(),
+    this.physics.add.collider(this.projectiles, this.breakables, (proj, br) =>
+      proj.destroy(),
     );
 
     this.cursors = this.input.keyboard.createCursorKeys();
@@ -692,10 +894,7 @@ class GameScene extends Phaser.Scene {
     this.cameras.main.setDeadzone(60, 40);
     this.createHUD();
     let fn =
-      biome.name +
-      " - Floor " +
-      PD.floor +
-      (this.isBossFloor ? " [BOSS]" : "");
+      biome.name + " - Floor " + PD.floor + (this.isBossFloor ? " [BOSS]" : "");
     let ft = this.add
       .text(400, 280, fn, {
         fontSize: "28px",
@@ -771,24 +970,14 @@ class GameScene extends Phaser.Scene {
       let cR = Math.floor((e.x + d * TW) / TW);
       if (!this.tileIsSolid(r, cR)) {
         if (
-          this.hasLineOfSight(
-            e.x + d * TW,
-            e.y,
-            this.player.x,
-            this.player.y,
-          )
+          this.hasLineOfSight(e.x + d * TW, e.y, this.player.x, this.player.y)
         )
           return 1;
       }
       let cL = Math.floor((e.x - d * TW) / TW);
       if (!this.tileIsSolid(r, cL)) {
         if (
-          this.hasLineOfSight(
-            e.x - d * TW,
-            e.y,
-            this.player.x,
-            this.player.y,
-          )
+          this.hasLineOfSight(e.x - d * TW, e.y, this.player.x, this.player.y)
         )
           return -1;
       }
@@ -796,12 +985,19 @@ class GameScene extends Phaser.Scene {
     return 0;
   }
   spawnGoldenChests() {
+    // Base 20% chance per floor, capped at 60% on deep floors
+    let chance = Math.min(0.6, 0.08 + PD.floor * 0.012);
+    if (Math.random() > chance) return;
     let spots = [...(this.validItemSpots || this.validEnemySpots)];
     Phaser.Utils.Array.Shuffle(spots);
-    let count = PD.floor >= 10 ? 2 : 1;
+    let count = PD.floor >= 20 ? 2 : 1;
     for (let i = 0; i < count && i < spots.length; i++) {
       let s = spots[i];
-      let gc = this.goldenChests.create(s.c * TW + TW / 2, s.r * TH + TH / 2 - 4, "golden_chest");
+      let gc = this.goldenChests.create(
+        s.c * TW + TW / 2,
+        s.r * TH + TH / 2 - 4,
+        "golden_chest",
+      );
       gc.opened = false;
       gc.setDepth(6);
     }
@@ -814,7 +1010,13 @@ class GameScene extends Phaser.Scene {
     if (!golden.length) return;
     let item = { ...golden[Math.floor(Math.random() * golden.length)] };
     PD.inventory.push(item);
-    this.floatText(chest.x, chest.y - 22, item.name + "!", RARITIES[item.rarity] || "#ffdd00", "14px");
+    this.floatText(
+      chest.x,
+      chest.y - 22,
+      item.name + "!",
+      RARITIES[item.rarity] || "#ffdd00",
+      "14px",
+    );
     this.cameras.main.flash(350, 0xff, 0xdd, 0x00, false);
     this.applyPlayerTint();
   }
@@ -822,8 +1024,14 @@ class GameScene extends Phaser.Scene {
     for (let sl of ["head", "body", "feet", "weapon"]) {
       let it = PD.equipment[sl];
       if (!it || !it.cosmetic) continue;
-      if (it.cosmetic === "golden") { this.player.setTint(0xffdd44); return; }
-      if (it.cosmetic === "shadow") { this.player.setTint(0xcc88ff); return; }
+      if (it.cosmetic === "golden") {
+        this.player.setTint(0xffdd44);
+        return;
+      }
+      if (it.cosmetic === "shadow") {
+        this.player.setTint(0xcc88ff);
+        return;
+      }
     }
     this.player.clearTint();
   }
@@ -900,12 +1108,7 @@ class GameScene extends Phaser.Scene {
     for (let i = 0; i < count && spots.length > 0; i++) {
       let s = spots.pop();
       let t = types[Math.floor(Math.random() * types.length)];
-      this.createEnemy(
-        t,
-        ENEMY_DEFS[t],
-        s.c * TW + TW / 2,
-        s.r * TH + TH / 2,
-      );
+      this.createEnemy(t, ENEMY_DEFS[t], s.c * TW + TW / 2, s.r * TH + TH / 2);
     }
   }
   createEnemy(type, ed, px, py) {
@@ -946,15 +1149,9 @@ class GameScene extends Phaser.Scene {
     let spots = [...this.validEnemySpots];
     Phaser.Utils.Array.Shuffle(spots);
     let bs =
-      spots.length > 0
-        ? spots.pop()
-        : { r: ROWS - 3, c: Math.floor(COLS / 2) };
+      spots.length > 0 ? spots.pop() : { r: ROWS - 3, c: Math.floor(COLS / 2) };
     let scale = 1 + Math.max(0, PD.floor - 5) * 0.08;
-    let e = this.enemies.create(
-      bs.c * TW + TW / 2,
-      bs.r * TH + TH / 2,
-      bt,
-    );
+    let e = this.enemies.create(bs.c * TW + TW / 2, bs.r * TH + TH / 2, bt);
     e.etype = bt;
     e.ehp = Math.floor(bd.hp * scale);
     e.emaxhp = e.ehp;
@@ -991,11 +1188,7 @@ class GameScene extends Phaser.Scene {
     let cc = Math.min(10 + PD.floor * 2, cs.length);
     for (let i = 0; i < cc; i++) {
       let s = cs[i];
-      let c = this.coins.create(
-        s.c * TW + TW / 2,
-        s.r * TH + TH / 2,
-        "coin",
-      );
+      let c = this.coins.create(s.c * TW + TW / 2, s.r * TH + TH / 2, "coin");
       c.body.setSize(12, 12);
       c.setBounce(0.3);
       c.goldValue =
@@ -1134,7 +1327,8 @@ class GameScene extends Phaser.Scene {
     p.setVelocityY(JUMP_VEL * 0.7);
   }
   hitFallingSlab(p, slab) {
-    if (this.invTimer > 0 || this.gameOver || slab.slabState !== "falling") return;
+    if (this.invTimer > 0 || this.gameOver || slab.slabState !== "falling")
+      return;
     this.takeDamage(18 + PD.floor * 2);
     p.setVelocityX((p.x < slab.x ? -1 : 1) * 180);
     p.setVelocityY(-180);
@@ -1165,10 +1359,52 @@ class GameScene extends Phaser.Scene {
   }
   hitPress(p, press) {
     if (this.invTimer > 0 || this.gameOver) return;
-    if (press.pressState !== "falling" && press.pressState !== "holding") return;
+    if (press.pressState !== "falling" && press.pressState !== "holding")
+      return;
     this.takeDamage(22 + PD.floor * 3);
     p.setVelocityX((p.x < press.x ? -1 : 1) * 200);
     p.setVelocityY(-200);
+  }
+  hitSpring(p, spring) {
+    // Launch the player high up and play a squash animation
+    p.setVelocityY(JUMP_VEL * 1.65);
+    this.extraJumps = 0; // reset extra jumps so player can still double-jump after
+    this.tweens.add({
+      targets: p,
+      scaleX: 0.75,
+      scaleY: 1.3,
+      duration: 70,
+      yoyo: true,
+    });
+    this.floatText(spring.x, spring.y - 20, "BOING!", "#44ff44");
+    this.coyoteTimer = COYOTE_TIME + 1; // prevent accidental coyote jump from spring
+  }
+  hitLava(p) {
+    if (this.invTimer > 0 || this.gameOver) return;
+    this.takeDamage(15 + PD.floor * 3);
+    p.setVelocityY(JUMP_VEL * 0.55);
+  }
+  hitMushroom(p) {
+    // Count clear tiles above the player body top (player.y - 8)
+    let headR = Math.floor((p.y - 8) / TH);
+    let col = Math.floor(p.x / TW);
+    let clearTiles = 0;
+    for (let r = headR - 1; r >= 0; r--) {
+      if (r >= ROWS || col >= COLS || isSolid(this.mapData[r][col])) break;
+      clearTiles++;
+    }
+    // Each clear tile ≈ 32 px. Full bounce needs ~5 tiles of headroom.
+    // JUMP_VEL is negative (upward), so scaling it by safeFraction directly
+    // reduces the launch magnitude when the ceiling is close.
+    let safeFraction = Math.min(1, clearTiles / 5);
+    p.setVelocityY(JUMP_VEL * 4.25 * safeFraction);
+    this.tweens.add({
+      targets: p,
+      scaleX: 0.8,
+      scaleY: 1.2,
+      duration: 60,
+      yoyo: true,
+    });
   }
   hitProjectile(p, proj) {
     if (this.invTimer > 0 || this.gameOver) return;
@@ -1201,12 +1437,7 @@ class GameScene extends Phaser.Scene {
   }
   takeDamage(dmg) {
     PD.hp -= dmg;
-    this.floatText(
-      this.player.x,
-      this.player.y - 20,
-      "-" + dmg,
-      "#ff4444",
-    );
+    this.floatText(this.player.x, this.player.y - 20, "-" + dmg, "#ff4444");
     this.invTimer = 1.2;
     this.player.setTint(0xff4444);
     this.cameras.main.shake(120, 0.015);
@@ -1243,12 +1474,84 @@ class GameScene extends Phaser.Scene {
   }
   doGameOver() {
     this.gameOver = true;
-    this.player.setTint(0xff0000);
-    this.player.setVelocityY(-300);
-    this.player.body.setAllowGravity(false);
     if (PD.floor > PD.bestFloor) PD.bestFloor = PD.floor;
     saveGame();
-    this.time.delayedCall(800, () => {
+
+    // Freeze player in place and flash red
+    this.player.body.setVelocity(0, 0);
+    this.player.body.setAllowGravity(false);
+    this.player.setTint(0xff2200);
+    this.cameras.main.shake(300, 0.03);
+    this.cameras.main.flash(120, 0xff, 0x00, 0x00, false);
+
+    // Scream text
+    const screams = [
+      "AAAARGH!",
+      "NOOOOO!",
+      "NOT AGAIN!",
+      "WHY?!",
+      "CURSE YOU!",
+    ];
+    let scream = screams[Math.floor(Math.random() * screams.length)];
+    let st = this.add
+      .text(this.player.x, this.player.y - 40, scream, {
+        fontSize: "22px",
+        fill: "#ff3300",
+        fontFamily: "monospace",
+        fontStyle: "bold",
+        stroke: "#000",
+        strokeThickness: 5,
+      })
+      .setOrigin(0.5)
+      .setDepth(70);
+    this.tweens.add({
+      targets: st,
+      y: st.y - 50,
+      alpha: 0,
+      duration: 900,
+      ease: "Quad.easeOut",
+      onComplete: () => st.destroy(),
+    });
+
+    // Burst of blood/spark particles
+    const COLORS = [0xff2200, 0xff6600, 0xffaa00, 0xdd0000];
+    for (let i = 0; i < 22; i++) {
+      let angle = Math.random() * Math.PI * 2;
+      let speed = 60 + Math.random() * 140;
+      let p = this.add
+        .circle(
+          this.player.x + Phaser.Math.Between(-4, 4),
+          this.player.y + Phaser.Math.Between(-6, 6),
+          2 + Math.random() * 3,
+          COLORS[Math.floor(Math.random() * COLORS.length)],
+        )
+        .setDepth(69)
+        .setAlpha(0.95);
+      let tx = p.x + Math.cos(angle) * speed;
+      let ty = p.y + Math.sin(angle) * speed * 0.6 - 20;
+      this.tweens.add({
+        targets: p,
+        x: tx,
+        y: ty + 40,
+        alpha: 0,
+        duration: 500 + Math.random() * 400,
+        ease: "Quad.easeOut",
+        onComplete: () => p.destroy(),
+      });
+    }
+
+    // Player spins and shrinks away
+    this.tweens.add({
+      targets: this.player,
+      angle: this.facingRight ? 540 : -540,
+      scaleX: 0,
+      scaleY: 0,
+      alpha: 0,
+      duration: 600,
+      ease: "Quad.easeIn",
+    });
+
+    this.time.delayedCall(900, () => {
       this.add
         .rectangle(400, 300, 800, 600, 0x000000, 0.75)
         .setScrollFactor(0)
@@ -1309,6 +1612,7 @@ class GameScene extends Phaser.Scene {
     });
   }
   collectCoin(p, coin) {
+    if (!coin.active) return;
     let stats = getStats();
     let v =
       (coin.goldValue || 1) +
@@ -1316,6 +1620,21 @@ class GameScene extends Phaser.Scene {
     PD.gold += v;
     PD.totalGold += v;
     this.floatText(coin.x, coin.y, "+" + v + "g", "#ffdd00", "12px");
+    // Coin collect sparkle
+    for (let i = 0; i < 4; i++) {
+      let angle = (i / 4) * Math.PI * 2;
+      let sp = this.add.circle(coin.x, coin.y, 2, 0xffdd44, 0.9).setDepth(12);
+      this.tweens.add({
+        targets: sp,
+        x: coin.x + Math.cos(angle) * 14,
+        y: coin.y + Math.sin(angle) * 14,
+        alpha: 0,
+        scaleX: 0,
+        scaleY: 0,
+        duration: 200,
+        onComplete: () => sp.destroy(),
+      });
+    }
     coin.destroy();
   }
   openChest(p, chest) {
@@ -1327,13 +1646,7 @@ class GameScene extends Phaser.Scene {
     g += Math.floor((g * stats.goldBonus) / 100);
     PD.gold += g;
     PD.totalGold += g;
-    this.floatText(
-      chest.x,
-      chest.y - 10,
-      "+" + g + "g",
-      "#ffdd00",
-      "14px",
-    );
+    this.floatText(chest.x, chest.y - 10, "+" + g + "g", "#ffdd00", "14px");
     if (Math.random() < 0.45) this.dropItem(chest.x, chest.y - 20);
     if (Math.random() < 0.3) this.dropConsumable(chest.x, chest.y);
   }
@@ -1511,8 +1824,41 @@ class GameScene extends Phaser.Scene {
     this.gameOver = true;
     if (PD.floor > PD.bestFloor) PD.bestFloor = PD.floor;
     saveGame();
-    this.cameras.main.fade(500);
-    this.time.delayedCall(500, () => this.scene.start("ShopScene"));
+
+    // Player keeps running toward the door, then shrinks into it
+    this.player.body.setAllowGravity(false);
+    let runDir = this.exit.x > this.player.x ? 1 : -1;
+    this.player.setFlipX(runDir < 0);
+    this.player.setVelocityX(runDir * 160);
+    this.player.setVelocityY(0);
+
+    // Animate player shrinking into the door
+    this.tweens.add({
+      targets: this.player,
+      scaleX: 0.05,
+      scaleY: 0.05,
+      alpha: 0,
+      duration: 500,
+      delay: 100,
+      ease: "Quad.easeIn",
+      onComplete: () => {
+        // Portal flash at door position
+        let flash = this.add
+          .circle(this.exit.x, this.exit.y, 24, 0xffffff, 0.9)
+          .setDepth(20);
+        this.tweens.add({
+          targets: flash,
+          scaleX: 2.5,
+          scaleY: 2.5,
+          alpha: 0,
+          duration: 350,
+          ease: "Quad.easeOut",
+          onComplete: () => flash.destroy(),
+        });
+        this.cameras.main.fade(400);
+        this.time.delayedCall(400, () => this.scene.start("ShopScene"));
+      },
+    });
   }
   doAttack() {
     if (this.attackTimer > 0 || this.gameOver) return;
@@ -1541,6 +1887,7 @@ class GameScene extends Phaser.Scene {
       let kbDir = this.player.x < enemy.x ? 1 : -1;
       enemy.setVelocityX(kbDir * wp.knockback);
       enemy.setVelocityY(-80 - wp.knockback * 0.2);
+      this.cameras.main.shake(50, crit ? 0.012 : 0.005);
       this.damageEnemy(enemy, dmg, crit);
       if (stats.lifesteal > 0 && enemy.active && enemy.ehp > 0) {
         let heal = Math.max(1, Math.floor((dmg * stats.lifesteal) / 100));
@@ -1555,20 +1902,16 @@ class GameScene extends Phaser.Scene {
       }
     });
     let hitBr = new Set();
-    let oc2 = this.physics.add.overlap(
-      slash,
-      this.breakables,
-      (s, br) => {
-        if (!br.active || hitBr.has(br)) return;
-        hitBr.add(br);
-        br.hp = (br.hp || 3) - 1;
-        br.setAlpha(0.3 + 0.7 * (br.hp / 3));
-        if (br.hp <= 0) {
-          this.spawnBreakableReward(br.x, br.y);
-          this.destroyBreakable(br);
-        }
-      },
-    );
+    let oc2 = this.physics.add.overlap(slash, this.breakables, (s, br) => {
+      if (!br.active || hitBr.has(br)) return;
+      hitBr.add(br);
+      br.hp = (br.hp || 3) - 1;
+      br.setAlpha(0.3 + 0.7 * (br.hp / 3));
+      if (br.hp <= 0) {
+        this.spawnBreakableReward(br.x, br.y);
+        this.destroyBreakable(br);
+      }
+    });
     this.tweens.add({
       targets: slash,
       alpha: 0,
@@ -1581,8 +1924,7 @@ class GameScene extends Phaser.Scene {
     });
   }
   doDash() {
-    if (this.dashCooldown > 0 || this.dashTimer > 0 || this.gameOver)
-      return;
+    if (this.dashCooldown > 0 || this.dashTimer > 0 || this.gameOver) return;
     let stats = getStats();
     this.dashTimer = DASH_DUR;
     this.dashCooldown = DASH_CD - stats.dashCdReduce;
@@ -1721,18 +2063,24 @@ class GameScene extends Phaser.Scene {
         if (e.mutateTimer <= 0) {
           e.mutated = false;
           e.espeed = e._basespeed;
-          if (e.auraGraphics) { e.auraGraphics.destroy(); e.auraGraphics = null; }
+          if (e.auraGraphics) {
+            e.auraGraphics.destroy();
+            e.auraGraphics = null;
+          }
         } else {
-          if (!e.auraGraphics) e.auraGraphics = this.add.graphics().setDepth(12);
+          if (!e.auraGraphics)
+            e.auraGraphics = this.add.graphics().setDepth(12);
           let ag = e.auraGraphics;
           ag.clear();
           let pulse = 0.55 + Math.sin(this.time.now * 0.006) * 0.45;
-          let aw = e.displayWidth + 10, ah = e.displayHeight + 10;
+          let aw = e.displayWidth + 10,
+            ah = e.displayHeight + 10;
           ag.lineStyle(3, 0xcc44ff, pulse);
           ag.strokeRect(e.x - aw / 2, e.y - ah / 2, aw, ah);
           ag.lineStyle(1, 0xffffff, pulse * 0.7);
           ag.strokeRect(e.x - aw / 2 + 4, e.y - ah / 2 + 4, aw - 8, ah - 8);
-          let sc = 3, sa = pulse > 0.6 ? pulse : 0;
+          let sc = 3,
+            sa = pulse > 0.6 ? pulse : 0;
           ag.fillStyle(0xee99ff, sa);
           ag.fillRect(e.x - aw / 2 - 1, e.y - ah / 2 - 1, sc, sc);
           ag.fillRect(e.x + aw / 2 - sc + 1, e.y - ah / 2 - 1, sc, sc);
@@ -1760,12 +2108,7 @@ class GameScene extends Phaser.Scene {
       dist = Math.sqrt(dx * dx + dy * dy);
     let type = e.etype;
 
-    let hasLOS = this.hasLineOfSight(
-      e.x,
-      e.y,
-      this.player.x,
-      this.player.y,
-    );
+    let hasLOS = this.hasLineOfSight(e.x, e.y, this.player.x, this.player.y);
 
     if (!e.aggroed && dist < e.aggroRange && hasLOS) {
       e.aggroed = true;
@@ -1904,10 +2247,33 @@ class GameScene extends Phaser.Scene {
       duration: 80,
       yoyo: true,
     });
+    // Jump puff — small dust cloud at feet
+    for (let i = 0; i < 4; i++) {
+      let p = this.add
+        .circle(
+          this.player.x + Phaser.Math.Between(-8, 8),
+          this.player.y + 14,
+          2 + Math.random() * 2,
+          0xbbbbaa,
+          0.7,
+        )
+        .setDepth(9);
+      this.tweens.add({
+        targets: p,
+        x: p.x + Phaser.Math.Between(-14, 14),
+        y: p.y + Phaser.Math.Between(4, 12),
+        alpha: 0,
+        scaleX: 2.5,
+        scaleY: 2.5,
+        duration: 220 + Math.random() * 100,
+        onComplete: () => p.destroy(),
+      });
+    }
   }
 
   update(time, delta) {
     if (this.gameOver) return;
+
     let dt = delta / 1000,
       stats = getStats();
     if (this._exitMsgCd > 0) this._exitMsgCd -= dt;
@@ -1949,9 +2315,7 @@ class GameScene extends Phaser.Scene {
             ) < 90
           ) {
             this.damageEnemy(e, stats.fireAura);
-            let fx = this.add
-              .circle(e.x, e.y, 8, 0xff4400, 0.5)
-              .setDepth(12);
+            let fx = this.add.circle(e.x, e.y, 8, 0xff4400, 0.5).setDepth(12);
             this.tweens.add({
               targets: fx,
               alpha: 0,
@@ -1989,6 +2353,50 @@ class GameScene extends Phaser.Scene {
       let phase = el.eTimer % el.eCycle;
       el.eActive = phase < 0.9;
       el.setAlpha(el.eActive ? 1 : 0.35);
+    });
+
+    // Update steam vents — timed blast that launches the player upward
+    this.steamVents.children.each((sv) => {
+      if (!sv.active) return;
+      sv.ventTimer += dt;
+      if (!sv.ventActive && sv.ventTimer >= sv.ventCycle) {
+        sv.ventActive = true;
+        sv.ventTimer = 0;
+        sv.ventCycle = 3 + Math.random() * 2;
+        sv.setTint(0xaaccff);
+        // Blast player if directly above the vent
+        let dx = Math.abs(this.player.x - sv.x);
+        let dy = sv.y - this.player.y; // positive = player is above
+        if (dx < TW * 0.8 && dy > 0 && dy < TH * 5) {
+          this.player.setVelocityY(JUMP_VEL * 1.4);
+          this.floatText(sv.x, sv.y - 24, "WHOOSH!", "#aaddff");
+        }
+        // Puff of steam particles
+        for (let i = 0; i < 5; i++) {
+          let p = this.add
+            .circle(
+              sv.x + Phaser.Math.Between(-10, 10),
+              sv.y - 8,
+              3,
+              0xaaddff,
+              0.6,
+            )
+            .setDepth(5);
+          this.tweens.add({
+            targets: p,
+            y: p.y - 44,
+            alpha: 0,
+            duration: 450,
+            onComplete: () => p.destroy(),
+          });
+        }
+        this.time.delayedCall(600, () => {
+          if (sv.active) {
+            sv.ventActive = false;
+            sv.clearTint();
+          }
+        });
+      }
     });
 
     // Update turrets
@@ -2057,13 +2465,22 @@ class GameScene extends Phaser.Scene {
       if (!sl.active || sl.slabState === "landed") return;
       if (sl.slabState === "idle") {
         let dx = Math.abs(this.player.x - sl.x);
-        if (dx < TW * 0.6 && this.player.y > sl.y && this.player.y < sl._floorY) {
+        if (
+          dx < TW * 0.6 &&
+          this.player.y > sl.y &&
+          this.player.y < sl._floorY
+        ) {
           sl.slabState = "warning";
           sl.slabTimer = 0.35;
           sl.setTint(0xff8844);
           for (let i = 0; i < 4; i++) {
             let p = this.add
-              .circle(sl.x + Phaser.Math.Between(-12, 12), sl.y - 6, 2, 0xaaaaaa)
+              .circle(
+                sl.x + Phaser.Math.Between(-12, 12),
+                sl.y - 6,
+                2,
+                0xaaaaaa,
+              )
               .setDepth(5);
             this.tweens.add({
               targets: p,
@@ -2094,7 +2511,7 @@ class GameScene extends Phaser.Scene {
     this.sbTimerBase.children.each((sb) => {
       if (!sb.active || !sb.spComp) return;
       sb.spTimer += dt;
-      let active = (sb.spTimer % sb.spCycle) < sb.spCycle * 0.45;
+      let active = sb.spTimer % sb.spCycle < sb.spCycle * 0.45;
       sb.spComp.spActive = active;
       sb.spComp.setAlpha(active ? 1 : 0);
     });
@@ -2137,7 +2554,11 @@ class GameScene extends Phaser.Scene {
       if (!rk.active || rk.rockState === "landed") return;
       if (rk.rockState === "idle") {
         let dx = Math.abs(this.player.x - rk.x);
-        if (dx < TW * 0.9 && this.player.y > rk.y && this.player.y < rk._floorY) {
+        if (
+          dx < TW * 0.9 &&
+          this.player.y > rk.y &&
+          this.player.y < rk._floorY
+        ) {
           rk.rockState = "warning";
           rk.rockTimer = 0.1;
           rk.setTint(0xff6633);
@@ -2165,7 +2586,12 @@ class GameScene extends Phaser.Scene {
           this.cameras.main.shake(130, 0.018);
           for (let i = 0; i < 6; i++) {
             let p = this.add
-              .circle(rk.x + Phaser.Math.Between(-14, 14), rk.y + 12, 3, 0x6a5a4a)
+              .circle(
+                rk.x + Phaser.Math.Between(-14, 14),
+                rk.y + 12,
+                3,
+                0x6a5a4a,
+              )
               .setDepth(5);
             this.tweens.add({
               targets: p,
@@ -2239,8 +2665,7 @@ class GameScene extends Phaser.Scene {
       mp.movePhase += dt * mp.moveSpeed * 0.03;
       let newX = mp.startX + Math.sin(mp.movePhase) * mp.moveRange;
       mp.body.velocity.x = ((newX - mp.x) / dt) * 0.5;
-      if (mp.x < TW * 2 || mp.x > WORLD_W - TW * 2)
-        mp.body.velocity.x *= -1;
+      if (mp.x < TW * 2 || mp.x > WORLD_W - TW * 2) mp.body.velocity.x *= -1;
     });
 
     // Carry player with moving platform
@@ -2306,18 +2731,15 @@ class GameScene extends Phaser.Scene {
       if (wasIce && onFloor) {
         // Low friction: slow acceleration/deceleration
         let lerpSpeed = inputX === 0 ? 0.02 : 0.04; // very slippery
-        this.playerVx = Phaser.Math.Linear(
-          this.playerVx,
-          targetVx,
-          lerpSpeed,
-        );
+        this.playerVx = Phaser.Math.Linear(this.playerVx, targetVx, lerpSpeed);
         this.player.setVelocityX(this.playerVx);
         this.player.body.setDragX(0);
       } else {
         // Detect if pressing directly into a wall while airborne (wall slide)
         let onWallL = this.player.body.blocked.left;
         let onWallR = this.player.body.blocked.right;
-        let slidingWall = !onFloor && ((inputX < 0 && onWallL) || (inputX > 0 && onWallR));
+        let slidingWall =
+          !onFloor && ((inputX < 0 && onWallL) || (inputX > 0 && onWallR));
         if (slidingWall) {
           // Just maintain gentle wall contact — gravity does the sliding
           this.player.setVelocityX(inputX * 8);
@@ -2392,10 +2814,30 @@ class GameScene extends Phaser.Scene {
         if (this.walkTimer > 0.12) {
           this.walkTimer = 0;
           this.walkFrame = 1 - this.walkFrame;
+          // Running dust puff every other step
+          if (this.walkFrame === 0) {
+            let p = this.add
+              .circle(
+                this.player.x + Phaser.Math.Between(-6, 6),
+                this.player.y + 14,
+                2 + Math.random() * 1.5,
+                0xaaaaaa,
+                0.5,
+              )
+              .setDepth(9);
+            this.tweens.add({
+              targets: p,
+              x: p.x + Phaser.Math.Between(-10, 10),
+              y: p.y + 6,
+              alpha: 0,
+              scaleX: 2,
+              scaleY: 2,
+              duration: 180,
+              onComplete: () => p.destroy(),
+            });
+          }
         }
-        this.player.setTexture(
-          this.walkFrame ? "player_walk1" : "player",
-        );
+        this.player.setTexture(this.walkFrame ? "player_walk1" : "player");
       } else if (!onFloor) this.player.setTexture("player_jump");
       else {
         this.player.setTexture("player");
@@ -2403,12 +2845,8 @@ class GameScene extends Phaser.Scene {
         this.walkFrame = 0;
       }
 
-      // === LANDING SQUASH ===
-      if (
-        onFloor &&
-        !this.wasOnFloor &&
-        this.player.body.velocity.y >= 0
-      ) {
+      // === LANDING SQUASH + DUST ===
+      if (onFloor && !this.wasOnFloor && this.player.body.velocity.y >= 0) {
         this.tweens.add({
           targets: this.player,
           scaleX: 1.2,
@@ -2416,8 +2854,71 @@ class GameScene extends Phaser.Scene {
           duration: 60,
           yoyo: true,
         });
+        // Landing dust burst; heavier shake for hard falls
+        let fallSpeed = this.player.body.velocity.y;
+        if (fallSpeed > 200) this.cameras.main.shake(80, 0.006);
+        let dustCount = fallSpeed > 300 ? 6 : 3;
+        for (let i = 0; i < dustCount; i++) {
+          let p = this.add
+            .circle(
+              this.player.x + Phaser.Math.Between(-10, 10),
+              this.player.y + 14,
+              2 + Math.random() * 2,
+              0xbbbbaa,
+              0.65,
+            )
+            .setDepth(9);
+          this.tweens.add({
+            targets: p,
+            x: p.x + Phaser.Math.Between(-18, 18),
+            y: p.y + Phaser.Math.Between(4, 10),
+            alpha: 0,
+            scaleX: 2.5,
+            scaleY: 2.5,
+            duration: 250 + Math.random() * 120,
+            onComplete: () => p.destroy(),
+          });
+        }
       }
       this.wasOnFloor = onFloor;
+    }
+
+    // === TILE INTERACTIONS: CONVEYOR + COBWEB ===
+    // These read mapData directly so they apply even during dash
+    let ptC = Math.floor(this.player.x / TW);
+    let ptR = Math.floor(this.player.y / TH);
+    // Conveyor: push player horizontally while standing on a conveyor tile
+    if (this.player.body.blocked.down) {
+      let footR = Math.floor((this.player.y + 14) / TH);
+      let footC = Math.floor(this.player.x / TW);
+      if (footR >= 0 && footR < ROWS && footC >= 0 && footC < COLS) {
+        let ft = this.mapData[footR][footC];
+        if (ft === 27 || ft === 28) {
+          let dir = ft === 27 ? -1 : 1;
+          this.player.setVelocityX(
+            Phaser.Math.Clamp(
+              this.player.body.velocity.x + dir * 110,
+              -280,
+              280,
+            ),
+          );
+        }
+      }
+    }
+    // Cobweb: cap speed when the player's center tile is a cobweb
+    if (ptR >= 0 && ptR < ROWS && ptC >= 0 && ptC < COLS) {
+      if (this.mapData[ptR][ptC] === 31) {
+        this.player.body.velocity.x = Phaser.Math.Clamp(
+          this.player.body.velocity.x,
+          -55,
+          55,
+        );
+        this.player.body.velocity.y = Phaser.Math.Clamp(
+          this.player.body.velocity.y,
+          -80,
+          60,
+        );
+      }
     }
 
     if (
@@ -2430,26 +2931,36 @@ class GameScene extends Phaser.Scene {
       Phaser.Input.Keyboard.JustDown(this.keys.k)
     )
       this.doDash();
-    if (Phaser.Input.Keyboard.JustDown(this.keys.one))
-      this.useConsumable(0);
-    if (Phaser.Input.Keyboard.JustDown(this.keys.two))
-      this.useConsumable(1);
-    if (Phaser.Input.Keyboard.JustDown(this.keys.three))
-      this.useConsumable(2);
-    if (Phaser.Input.Keyboard.JustDown(this.keys.four))
-      this.useConsumable(3);
+    if (Phaser.Input.Keyboard.JustDown(this.keys.one)) this.useConsumable(0);
+    if (Phaser.Input.Keyboard.JustDown(this.keys.two)) this.useConsumable(1);
+    if (Phaser.Input.Keyboard.JustDown(this.keys.three)) this.useConsumable(2);
+    if (Phaser.Input.Keyboard.JustDown(this.keys.four)) this.useConsumable(3);
 
     if (this.shieldSprite && PD.shieldHits > 0)
       this.shieldSprite.setPosition(this.player.x, this.player.y);
     this.enemies.children.each((e) => this.updateEnemyAI(e, dt));
+
+    // === COIN ATTRACTION ===
+    // Coins within 80px home in on player; 45px = instant collect
+    this.coins.children.each((coin) => {
+      if (!coin.active) return;
+      let dx = this.player.x - coin.x;
+      let dy = this.player.y - coin.y;
+      let dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 5) {
+        this.collectCoin(this.player, coin);
+      } else if (dist < 30) {
+        let speed = Phaser.Math.Linear(80, 220, 1 - dist / 80);
+        coin.body.setVelocity((dx / dist) * speed, (dy / dist) * speed);
+      }
+    });
 
     let hpRatio = Math.max(0, PD.hp / stats.maxHp);
     this.hpBarFill.width = 200 * hpRatio;
     this.hpBarFill.fillColor =
       hpRatio > 0.5 ? 0x44cc44 : hpRatio > 0.25 ? 0xcccc44 : 0xcc4444;
     this.hpText.setText(PD.hp + "/" + stats.maxHp);
-    this.xpBarFill.width =
-      200 * (PD.xpToNext > 0 ? PD.xp / PD.xpToNext : 0);
+    this.xpBarFill.width = 200 * (PD.xpToNext > 0 ? PD.xp / PD.xpToNext : 0);
     this.infoText.setText(
       "Lv." +
         PD.level +

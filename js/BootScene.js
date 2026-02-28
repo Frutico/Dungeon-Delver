@@ -492,6 +492,104 @@ class BootScene extends Phaser.Scene {
     g.fillStyle(0x333355, 0.2);
     g.fillRect(0, 300, 800, 300);
     g.generateTexture("parallax_bg", 800, 600);
+    // Spring tile (25) — bright green coiled spring
+    g.clear();
+    g.fillStyle(0x224422);
+    g.fillRect(0, 26, 32, 6);
+    g.fillStyle(0x33aa33);
+    g.fillRect(2, 20, 28, 5);
+    g.fillRect(4, 13, 24, 5);
+    g.fillRect(2, 6, 28, 5);
+    g.fillStyle(0x66dd66);
+    g.fillRect(4, 21, 12, 2);
+    g.fillRect(4, 14, 12, 2);
+    g.fillRect(4, 7, 12, 2);
+    g.generateTexture("spring_tile", 32, 32);
+    // Conveyor left (27) — dark grey belt with left-pointing chevrons
+    g.clear();
+    g.fillStyle(0x445566);
+    g.fillRect(0, 18, 32, 14);
+    g.fillStyle(0x556677);
+    g.fillRect(0, 18, 32, 4);
+    g.fillStyle(0x99bbdd);
+    g.fillTriangle(28, 22, 20, 26, 28, 30);
+    g.fillTriangle(20, 22, 12, 26, 20, 30);
+    g.fillTriangle(12, 22, 4, 26, 12, 30);
+    g.generateTexture("conveyor_l", 32, 32);
+    // Conveyor right (28) — dark grey belt with right-pointing chevrons
+    g.clear();
+    g.fillStyle(0x445566);
+    g.fillRect(0, 18, 32, 14);
+    g.fillStyle(0x556677);
+    g.fillRect(0, 18, 32, 4);
+    g.fillStyle(0x99bbdd);
+    g.fillTriangle(4, 22, 12, 26, 4, 30);
+    g.fillTriangle(12, 22, 20, 26, 12, 30);
+    g.fillTriangle(20, 22, 28, 26, 20, 30);
+    g.generateTexture("conveyor_r", 32, 32);
+    // Lava (29) — glowing orange-red pool
+    g.clear();
+    g.fillStyle(0x881100);
+    g.fillRect(0, 0, 32, 32);
+    g.fillStyle(0xcc3300);
+    g.fillRect(0, 4, 32, 12);
+    g.fillRect(4, 16, 24, 6);
+    g.fillStyle(0xff6600);
+    g.fillRect(2, 2, 8, 5);
+    g.fillRect(14, 0, 10, 7);
+    g.fillRect(24, 3, 6, 4);
+    g.fillStyle(0xff9900, 0.6);
+    g.fillRect(4, 0, 4, 3);
+    g.fillRect(20, 2, 4, 3);
+    g.generateTexture("lava_tile", 32, 32);
+    // Lava body (30) — deeper, dimmer lava fill
+    g.clear();
+    g.fillStyle(0x661100);
+    g.fillRect(0, 0, 32, 32);
+    g.fillStyle(0xaa2200);
+    g.fillRect(0, 0, 32, 8);
+    g.fillRect(4, 8, 24, 6);
+    g.fillStyle(0xdd4400, 0.7);
+    g.fillRect(6, 2, 5, 4);
+    g.fillRect(20, 4, 6, 4);
+    g.generateTexture("lava_body_tile", 32, 32);
+    // Cobweb tile (31) — translucent web strands
+    g.clear();
+    g.lineStyle(1, 0xdddddd, 0.65);
+    g.lineBetween(0, 0, 32, 32);
+    g.lineBetween(32, 0, 0, 32);
+    g.lineBetween(16, 0, 16, 32);
+    g.lineBetween(0, 16, 32, 16);
+    g.lineBetween(0, 8, 24, 32);
+    g.lineBetween(8, 0, 32, 24);
+    g.generateTexture("cobweb_tile", 32, 32);
+    // Steam vent (38) — dark metal plate with vent slits
+    g.clear();
+    g.fillStyle(0x555555);
+    g.fillRect(0, 0, 32, 32);
+    g.fillStyle(0x3a3a3a);
+    g.fillRect(0, 0, 32, 4);
+    g.fillStyle(0x222222);
+    g.fillRect(4, 8, 8, 6);
+    g.fillRect(14, 8, 8, 6);
+    g.fillRect(24, 8, 4, 6);
+    g.fillStyle(0x888888);
+    g.fillRect(2, 20, 28, 3);
+    g.fillRect(2, 26, 28, 2);
+    g.generateTexture("steam_vent_tile", 32, 32);
+    // Mushroom bounce tile (40) — red cap with white spots
+    g.clear();
+    g.fillStyle(0x553311);
+    g.fillRect(10, 20, 12, 12);
+    g.fillStyle(0xcc2222);
+    g.fillRect(0, 6, 32, 16);
+    g.fillStyle(0xee4444);
+    g.fillRect(0, 6, 32, 6);
+    g.fillStyle(0xffffff);
+    g.fillCircle(8, 14, 3);
+    g.fillCircle(20, 12, 2);
+    g.fillCircle(26, 16, 2);
+    g.generateTexture("mushroom_tile", 32, 32);
     g.destroy();
     this.scene.start("MenuScene");
   }
